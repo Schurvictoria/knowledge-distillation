@@ -1,4 +1,4 @@
-# distil - LLM to Gradient Boosting Knowledge Distillation
+# Knowledge Distillation
 
 Pseudo-label distillation from LLM to XGBoost/CatBoost on bank transaction datasets.
 
