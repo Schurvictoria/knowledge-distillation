@@ -6,18 +6,17 @@ We study two directions of knowledge transfer: distilling LLM outputs (pseudo-la
 
 We assume the general research questions:
 
-- Зависит ли оптимальный способ инъекции знаний от стратегии промптинга (zero-shot, few-shot, CoT) и существует ли взаимодействие между типом инъекции и стратегией?
-- Как размер LLM влияет на качество knowledge transfer в обоих направлениях и существует ли порог размера, ниже которого дистилляция не даёт прироста?
-- Улучшает ли CoT reasoning качество учительского сигнала при дистилляции и при каких условиях CoT-rationales полезны как дополнительный supervisory сигнал?
+- Does the best way to transfer knowledge depend on how the LLM is prompted (zero-shot, few-shot, CoT)?
+- Does LLM size affect transfer quality in both directions?
+- Does chain-of-thought reasoning improve the teacher signal?
 
 And we assume other questions:
 ## 1. LLMs -> Structure models
-- Какой метод передачи знаний от LLM в structured models эффективнее — training-time (дистилляция: soft labels, contrastive alignment) или inference-time (feature augmentation: LLM embeddings как доп. признаки)?
-- Какая архитектура ученика лучше усваивает знания от LLM — gradient boosting (XGBoost), sequence encoder (CoLES) или tabular foundation model (TabPFN)?
+- Which approach works better for transferring LLM knowledge — training-time distillation (soft labels, contrastive alignment) or inference-time feature augmentation (LLM embeddings as extra input features)?
+- Which student architecture learns best from LLM supervision — gradient boosting (XGBoost/CatBoost), sequence encoder (CoLES), or tabular foundation model (TabPFN)?
  
 ## 1. Structure models -> LLMs
-- Какой метод передачи знаний от structured model в LLM эффективнее — training-time (fine-tune LLM на транзакциях) или inference-time (обогащение промптов: SHAP, kNN retrieval)?
-
+- Which approach works better for transferring structured model knowledge to the LLM — fine-tuning on transaction sequences, or enriching prompts with SHAP explanations and kNN retrieval context?
 
 As a result
 
