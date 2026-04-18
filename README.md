@@ -7,10 +7,13 @@ We study two directions of knowledge transfer: distilling LLM outputs (pseudo-la
 We assume the general research questions:
 
 RQ1: Does bidirectional knowledge transfer between LLMs and structured models improve transaction classification performance compared to either approach alone?
+
 RQ2: Which teacher signal and transfer method works best in each direction?
+
 RQ3: How do LLM size and CoT reasoning ability affect transfer quality in both directions?
 
-You can see the results in REPORT.md
+
+You can see the results in [REPORT.md](./REPORT.md)
 
 As a result we suggest RAMD
 
