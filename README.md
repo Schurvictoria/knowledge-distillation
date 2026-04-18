@@ -12,56 +12,44 @@ We study two directions of knowledge transfer: distilling LLM outputs (pseudo-la
  - [опц.] Сравнить эффективность в zero-shot и fine-tuning режимах.
  - [опц.] Подготовить научную публикацию.
 
- - 
+RQ1: Какой метод передачи знаний из LLM в structured models наиболее эффективен — knowledge distillation (response/feature/relation-based), feature augmentation (LLM embeddings как фичи), CoT distillation или их комбинация?
+
+RQ2: Как размер и качество LLM-teacher'а влияют на результат передачи знаний в табличные модели?
+
+RQ3: Какой тип учительского сигнала наиболее эффективен при дистилляции: response-based (soft labels), feature-based (embedding augmentation) или relation-based (contrastive alignment)?
+
+RQ4: Какая архитектура ученика лучше усваивает знания от LLM — gradient boosting или sequence encoder?
+
+### Direction 2: Structured Models → LLM
+
+RQ5: Какой тип знания от structured model наиболее эффективен для улучшения предсказаний LLM — model predictions, feature-level explanations, instance-level retrieval или structured reasoning?
+
+RQ6: Как стратегия промптинга (zero-shot, few-shot, CoT) взаимодействует с типом обогащения от structured model?
+
+RQ7: Как масштаб и архитектура LLM влияют на эффективность обогащения промптов сигналами от structured models?
+
+
+
+We assume the general research questions:
+RQ8: Помогает ли CoT reasoning в обоих направлениях knowledge transfer?
+
+And we assume following research questions in this project:
+
+## 1. LLMs -> Structure models
+RQ1: Улучшает ли дистилляция из LLM качество structured models?
+RQ2: Влияет ли сила LLM-teacher'а на качество дистилляции?
+RQ3: Важен ли CoT reasoning teacher'а при дистилляции?
+RQ4: Какой ученик лучше усваивает — бустинг или sequence encoder?
+
+ 
 ## 1. Structure models -> LLMs
 
-Here we assume the following research questions:
-
 RQ5: Какой тип сигнала от structured model лучше помогает LLM?
-
-| Тип сигнала | Что LLM получает | Gender | Rosbank | Age |
-|-------------|-----------------|--------|---------|-----|
-| Нет | Только профиль клиента | 0.498 | 0.499 | 0.249 |
-| Prediction | "ML model says: male (73%)" | ? | ? | ? |
-| Explanation | "Top factors: Retail high" (SHAP) | 0.606 | 0.637 | ? |
-| Retrieval | "7/10 neighbors = male" (kNN) | 0.762 | 0.766 | 0.250 |
-| Все вместе | Prediction + SHAP + kNN | 0.745 | 0.751 | ? |
-
----
-
-RQ6: Какая стратегия промптинга лучше работает с обогащением?
-
-| Стратегия | Без обогащения | + SHAP | + kNN | + оба |
-|-----------|---------------|--------|-------|-------|
-| Zero-shot | 0.498 | ? | ? | ? |
-| Few-shot | 0.578 | ? | ? | ? |
-| CoT | ? | 0.606 | 0.762 | 0.745 |
-
----
-
-RQ7: Влияет ли сила LLM на эффективность обогащения промптов?
-
-| LLM | Размер | Без обогащения | + kNN CoT | Δ |
-|-----|--------|---------------|-----------|---|
-| Gemma 3n E2B | 2B | ? | ? | ? |
-| Qwen2.5-7B | 7B | 0.498 | 0.762 | +26 пп |
-| Qwen3.6-35B | 35B | ? | ? | ? |
-| DeepSeek-R1 | ~70B | ? | ? | ? |
-| GPT-4o | ~200B | ? | ? | ? |
-
----
-
-RQ8: Влияет ли CoT reasoning LLM на качество при обогащении?
-
-| LLM | Thinking | Без обогащения | + kNN CoT |
-|-----|----------|---------------|-----------|
-| Qwen3.6-35B | off | ? | ? |
-| Qwen3.6-35B | on | ? | ? |
-| DeepSeek-R1 | off | ? | ? |
-| DeepSeek-R1 | on | ? | ? |
+RQ6: Какая стратегия промптинга лучше при обогащении?
+RQ7: Зависит ли эффект обогащения от силы LLM?
 
 
-We ass
+As a result
 
 ## Architecture
 
@@ -70,7 +58,6 @@ We ass
 ## Datasets
 
 ## Main results
-
 
 ## Project Structure
 
