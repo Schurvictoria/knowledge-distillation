@@ -1,47 +1,66 @@
-## 1. Structure models -> LLMs
+## RQ1: Bidirectional vs Unidirectional
 
-Here we assume the following research questions:
+| Method | Type | Gender (AUC) | Rosbank (AUC) | Age (Acc) |
+|--------|------|-------------|---------------|-----------|
+| CoLES baseline | No transfer | 0.8626 | 0.8054 | 0.6345 |
+| True LATTE | LLM→Struct only | 0.8674 | 0.8057 | 0.6429 |
+| True Bidirectional | Both (joint) | 0.8676 | 0.8142 | 0.6363 |
+| kNN CoT → LLM | Struct→LLM only | — | — | — |
+| RAMD (weak teacher) | Bidirectional loop | 0.8630 | 0.8074 | — |
+| RAMD (strong teacher) | Bidirectional loop | ? | ? | ? |
 
-RQ5: Какой тип сигнала от structured model лучше помогает LLM?
+## RQ2 Direction 1: Teacher Signal Type (LLM → Structured)
 
-| Тип сигнала | Что LLM получает | Gender | Rosbank | Age |
-|-------------|-----------------|--------|---------|-----|
-| Нет | Только профиль клиента | 0.498 | 0.499 | 0.249 |
-| Prediction | "ML model says: male (73%)" | ? | ? | ? |
-| Explanation | "Top factors: Retail high" (SHAP) | 0.606 | 0.637 | ? |
-| Retrieval | "7/10 neighbors = male" (kNN) | 0.762 | 0.766 | 0.250 |
-| Все вместе | Prediction + SHAP + kNN | 0.745 | 0.751 | ? |
+| Signal Type | Method | Gender | Rosbank | Age |
+|------------|--------|--------|---------|-----|
+| Response-based (soft labels) | Reverse KL | 0.8633 | 0.8074 | 0.6399 |
+| Feature-based (embeddings) | LLM4ES concat | 0.864 | 0.819 | 0.640 |
+| Relation-based (contrastive) | True LATTE | 0.8674 | 0.8057 | 0.6429 |
+| All combined | True Bidirectional | 0.8676 | 0.8142 | 0.6363 |
 
----
+## RQ2 Direction 2: Enrichment Type (Structured → LLM)
 
-RQ6: Какая стратегия промптинга лучше работает с обогащением?
+| Enrichment | Structured Model | Gender | Rosbank | Age |
+|-----------|-----------------|--------|---------|-----|
+| None | — | 0.498 | 0.499 | 0.249 |
+| Prediction | XGBoost confidence | ? | ? | ? |
+| Explanation | XGBoost SHAP | 0.606 | 0.637 | ? |
+| Retrieval | CoLES kNN | 0.762 | 0.766 | 0.250 |
+| All combined | XGBoost + CoLES | 0.745 | 0.751 | ? |
 
-| Стратегия | Без обогащения | + SHAP | + kNN | + оба |
-|-----------|---------------|--------|-------|-------|
+## RQ2 Direction 2: Strategy × Enrichment (матрица)
+
+| Strategy | None | + SHAP | + kNN | + Both |
+|----------|------|--------|-------|--------|
 | Zero-shot | 0.498 | ? | ? | ? |
 | Few-shot | 0.578 | ? | ? | ? |
 | CoT | ? | 0.606 | 0.762 | 0.745 |
 
----
+## RQ3: LLM Size Effect
 
-RQ7: Влияет ли сила LLM на эффективность обогащения промптов?
+### Direction 1 (LLM → Structured Models, True LATTE distillation)
 
-| LLM | Размер | Без обогащения | + kNN CoT | Δ |
-|-----|--------|---------------|-----------|---|
+| Teacher LLM | Size | Gender (AUC) | Rosbank (AUC) | Age (Acc) |
+|-------------|------|-------------|---------------|-----------|
 | Gemma 3n E2B | 2B | ? | ? | ? |
-| Qwen2.5-7B | 7B | 0.498 | 0.762 | +26 пп |
-| Qwen3.6-35B | 35B | ? | ? | ? |
-| DeepSeek-R1 | ~70B | ? | ? | ? |
+| Qwen2.5-7B-Instruct | 7B | 0.8674 | 0.8057 | 0.6429 |
+| Qwen3.6-35B-A3B | 35B MoE | ? | ? | ? |
+| DeepSeek-R1-0528 | 671B MoE | ? | ? | ? |
 | GPT-4o | ~200B | ? | ? | ? |
 
----
+### Direction 2 (Structured Models → LLM, kNN CoT enrichment)
 
-RQ8: Влияет ли CoT reasoning LLM на качество при обогащении?
+| LLM | Size | No enrichment | + kNN CoT | Δ |
+|-----|------|--------------|-----------|---|
+| Gemma 3n E2B | 2B | ? | ? | ? |
+| Qwen2.5-7B-Instruct | 7B | 0.498 | 0.762 | +26 pp |
+| Qwen3.6-35B-A3B | 35B MoE | ? | ? | ? |
+| DeepSeek-R1-0528 | 671B MoE | ? | ? | ? |
+| GPT-4o | ~200B | ? | ? | ? |
 
-| LLM | Thinking | Без обогащения | + kNN CoT |
-|-----|----------|---------------|-----------|
-| Qwen3.6-35B | off | ? | ? |
-| Qwen3.6-35B | on | ? | ? |
-| DeepSeek-R1 | off | ? | ? |
-| DeepSeek-R1 | on | ? | ? |
+### CoT Reasoning Effect
 
+| Teacher LLM | Size | Thinking=off | Thinking=on | Δ |
+|-------------|------|-------------|-------------|---|
+| Qwen3.6-35B-A3B | 35B MoE | ? | ? | ? |
+| DeepSeek-R1-0528 | 671B MoE | ? | ? | ? |
