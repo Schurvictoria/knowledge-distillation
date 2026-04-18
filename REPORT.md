@@ -11,6 +11,10 @@
 
 ## RQ2 Direction 1: Teacher Signal Type (LLM → Structured)
 
+Какой тип учительского сигнала эффективнее при дистилляции?
+
+Student: CoLES GRU/LSTM → LightGBM. Teacher: Qwen2.5-3B (LLM4ES). 5 seeds, mean±std. Train/test split seed=42.
+
 | Signal Type | What student receives from LLM | Method | Gender | Rosbank | Age |
 |------------|-------------------------------|--------|--------|---------|-----|
 | Response-based | Soft label: "male 73%" | Reverse KL distillation | 0.8633 | 0.8074 | 0.6399 |
@@ -19,6 +23,10 @@
 | All three combined | Soft labels + embeddings + contrastive | LATTE + mutual learning + LoRA | 0.8676 | 0.8142 | 0.6363 |
 
 ## RQ2 Direction 2: Enrichment Type (Structured → LLM)
+
+Какой тип знания от structured model лучше помогает LLM?
+
+LLM: Qwen2.5-7B-Instruct, 4-bit NF4. Стратегия: CoT. Один прогон (LLM inference детерминированный). Train/test split seed=42.
 
 | Enrichment | Structured Model | Gender | Rosbank | Age |
 |-----------|-----------------|--------|---------|-----|
@@ -30,6 +38,10 @@
 
 ## RQ2 Direction 2: Strategy × Enrichment (матрица)
 
+Зависит ли эффект обогащения от стратегии промптинга?
+
+LLM: Qwen2.5-7B-Instruct, 4-bit NF4. Dataset: Gender. Один прогон (детерминированный). Train/test split seed=42.
+
 | Strategy | None | + SHAP | + kNN | + Both |
 |----------|------|--------|-------|--------|
 | Zero-shot | 0.498 | 0.542 | 0.770 | 0.616 |
@@ -38,7 +50,12 @@
 
 ## RQ3: LLM Size Effect
 
+
 ### Direction 1 (LLM → Structured Models, True LATTE distillation)
+
+Влияет ли размер LLM-teacher на качество дистилляции?
+
+Method: True LATTE (contrastive alignment). Student: CoLES → LightGBM. 5 seeds, mean±std. Train/test split seed=42.
 
 | Teacher LLM | Size | Gender (AUC) | Rosbank (AUC) | Age (Acc) |
 |-------------|------|-------------|---------------|-----------|
@@ -50,6 +67,10 @@
 
 ### Direction 2 (Structured Models → LLM, kNN CoT enrichment)
 
+Влияет ли размер LLM на эффективность обогащения промптов?
+
+Method: Zero-shot + kNN CoT (лучшая комбинация из RQ2). Dataset: Gender. Один прогон (детерминированный). Train/test split seed=42.
+
 | LLM | Size | No enrichment | + kNN CoT | Δ |
 |-----|------|--------------|-----------|---|
 | Gemma 3n E2B | 2B | ? | ? | ? |
@@ -59,6 +80,10 @@
 | GPT-4o | ~200B | ? | ? | ? |
 
 ### CoT Reasoning Effect
+
+Улучшает ли thinking mode качество LLM при обогащении промптов?
+
+Method: Zero-shot + kNN CoT. Dataset: Gender. Один прогон (детерминированный). Train/test split seed=42.
 
 | Teacher LLM | Size | Thinking=off | Thinking=on | Δ |
 |-------------|------|-------------|-------------|---|
