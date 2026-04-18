@@ -1,22 +1,22 @@
 ## RQ1: Bidirectional vs Unidirectional
 
-| Method | Type | Gender (AUC) | Rosbank (AUC) | Age (Acc) |
-|--------|------|-------------|---------------|-----------|
-| CoLES baseline | No transfer | 0.8626 | 0.8054 | 0.6345 |
-| True LATTE | LLM→Struct only | 0.8674 | 0.8057 | 0.6429 |
-| True Bidirectional | Both (joint) | 0.8676 | 0.8142 | 0.6363 |
-| kNN CoT → LLM | Struct→LLM only | — | — | — |
-| RAMD (weak teacher) | Bidirectional loop | 0.8630 | 0.8074 | — |
-| RAMD (strong teacher) | Bidirectional loop | ? | ? | ? |
+| Method | Description | Direction | Gender | Rosbank | Age |
+|--------|---------------|-----------|--------|---------|-----|
+| CoLES baseline | Just a CoLES baseline | No transfer | 0.8626 | 0.8054 | 0.6345 |
+| LATTE | CoLES учится у LLM embeddings через contrastive loss. веса LLM не обновляются | LLM → CoLES | 0.8674 | 0.8057 | 0.6429 |
+| LATTE + mutual KL | CoLES и LLM учат друг друга одновременно. Оба обновляют веса | LLM ↔ CoLES | 0.8676 | 0.8142 | 0.6363 |
+| RAMD (Qwen2.5-7B) | Цикл: CoLES помогает LLM через kNN → LLM помогает CoLES через KL → повторить | LLM ↔ CoLES (loop) | 0.8630 | 0.8074 | — |
+| RAMD (DeepSeek-R1) | Тот же цикл, сильнее LLM | LLM ↔ CoLES (loop) | ? | ? | ? |
+| RAMD (GPT-4o) | Тот же цикл, сильнейший LLM | LLM ↔ CoLES (loop) | ? | ? | ? |
 
 ## RQ2 Direction 1: Teacher Signal Type (LLM → Structured)
 
-| Signal Type | Method | Gender | Rosbank | Age |
-|------------|--------|--------|---------|-----|
-| Response-based (soft labels) | Reverse KL | 0.8633 | 0.8074 | 0.6399 |
-| Feature-based (embeddings) | LLM4ES concat | 0.864 | 0.819 | 0.640 |
-| Relation-based (contrastive) | True LATTE | 0.8674 | 0.8057 | 0.6429 |
-| All combined | True Bidirectional | 0.8676 | 0.8142 | 0.6363 |
+| Signal Type | What student receives from LLM | Method | Gender | Rosbank | Age |
+|------------|-------------------------------|--------|--------|---------|-----|
+| Response-based | Soft label: "male 73%" | Reverse KL distillation | 0.8633 | 0.8074 | 0.6399 |
+| Feature-based | LLM embedding (2048 чисел) как доп. фичи | LLM4ES concat → LGBM | 0.864 | 0.819 | 0.640 |
+| Relation-based | "Клиент A и B похожи в LLM space" | Contrastive alignment (LATTE) | 0.8674 | 0.8057 | 0.6429 |
+| All three combined | Soft labels + embeddings + contrastive | LATTE + mutual learning + LoRA | 0.8676 | 0.8142 | 0.6363 |
 
 ## RQ2 Direction 2: Enrichment Type (Structured → LLM)
 
