@@ -48,6 +48,7 @@ LLM: Qwen2.5-7B-Instruct, 4-bit NF4. Dataset: Gender. Один прогон (д�
 | Few-shot | 0.578 | 0.555 | 0.766 | 0.592 |
 | CoT | 0.491 | 0.606 | 0.762 | 0.745 |
 
+
 ## RQ3: LLM Size Effect
 
 
