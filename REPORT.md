@@ -6,7 +6,7 @@
 | LATTE | CoLES учится у LLM embeddings через contrastive loss. веса LLM не обновляются | LLM → CoLES | 0.8674 | 0.8057 | 0.6429 |
 | LATTE + mutual KL | CoLES и LLM учат друг друга одновременно. Оба обновляют веса | LLM ↔ CoLES | 0.8676 | 0.8142 | 0.6363 |
 | RAMD (Qwen2.5-7B) | Цикл: CoLES помогает LLM через kNN → LLM помогает CoLES через KL → повторить | LLM ↔ CoLES (loop) | 0.8630 | 0.8074 | — |
-| RAMD (DeepSeek-R1) | Тот же цикл, сильнее LLM | LLM ↔ CoLES (loop) | ? | ? | ? |
+| RAMD (DeepSeek-V3.2) | Тот же цикл, сильнее LLM | LLM ↔ CoLES (loop) | **0.8630 ± 0.0006** | **0.8072 ± 0.0034** | OOF running |
 | RAMD (GPT-4o) | Тот же цикл, сильнейший LLM | LLM ↔ CoLES (loop) | ? | ? | ? |
 
 ## RQ2 Direction 1: Teacher Signal Type (LLM → Structured)
@@ -30,11 +30,11 @@ LLM: Qwen2.5-7B-Instruct, 4-bit NF4. Стратегия: CoT. Один прог�
 
 | Enrichment | Structured Model | Gender | Rosbank | Age |
 |-----------|-----------------|--------|---------|-----|
-| None | — | 0.498 | 0.499 | 0.249 |
-| Prediction | XGBoost confidence | ? | ? | ? |
-| Explanation | XGBoost SHAP | 0.606 | 0.637 | ? |
+| None | — | 0.498 | 0.499 | 0.250 |
+| Prediction | XGBoost confidence | 0.5083 | 0.5474 | 0.2780 |
+| Explanation | XGBoost SHAP | 0.606 | 0.637 | **0.2607** |
 | Retrieval | CoLES kNN | 0.762 | 0.766 | 0.250 |
-| All combined | XGBoost + CoLES | 0.745 | 0.751 | ? |
+| All combined | XGBoost + CoLES | 0.745 | 0.751 | **0.2510** |
 
 ## RQ2 Direction 2: Strategy × Enrichment (матрица)
 
@@ -74,11 +74,13 @@ Method: Zero-shot + kNN CoT (лучшая комбинация из RQ2). Datase
 
 | LLM | Size | No enrichment | + kNN CoT | Δ |
 |-----|------|--------------|-----------|---|
-| Gemma 3n E2B | 2B | ? | ? | ? |
+| Gemma 3-4B (proxy for 2B) | 4B | 0.5280 | 0.7669 | +23.9 pp |
 | Qwen2.5-7B-Instruct | 7B | 0.498 | 0.762 | +26 pp |
-| Qwen3.6-35B-A3B | 35B MoE | ? | ? | ? |
-| DeepSeek-R1-0528 | 671B MoE | ? | ? | ? |
+| Qwen3.6-35B-A3B | 35B MoE | 0.5077 | 0.7790 | +27.1 pp |
+| DeepSeek-R1-0528 | 671B MoE | 0.5152* | 0.7828* | +26.8 pp* |
 | GPT-4o | ~200B | ? | ? | ? |
+
+`*` = без API seed=42. Значения без `*` — строго воспроизводимо (seed=42 в API payload).
 
 ### CoT Reasoning Effect
 
@@ -88,5 +90,7 @@ Method: Zero-shot + kNN CoT. Dataset: Gender. Один прогон (детер�
 
 | Teacher LLM | Size | Thinking=off | Thinking=on | Δ |
 |-------------|------|-------------|-------------|---|
-| Qwen3.6-35B-A3B | 35B MoE | ? | ? | ? |
-| DeepSeek-R1-0528 | 671B MoE | ? | ? | ? |
+| Qwen3.6-35B-A3B | 35B MoE | 0.7138* | 0.7151* | +0.13 pp* |
+| DeepSeek-R1-0528 | 671B MoE | N/A | 0.7828* | — |
+
+`*` = запуск БЕЗ API seed=42. DeepSeek thinking=off не поддерживается API (требует reasoning=on).
