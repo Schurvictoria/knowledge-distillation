@@ -92,13 +92,10 @@ def load_age(seed):
 
     target_map = dict(zip(labels["client_id"], labels["bins"]))
 
-    # trans_date is integer day offset — already correct for sorting
     tx = tx.sort_values(["client_id", "trans_date"])
 
-    # Log transform amount
     tx["amount_rur"] = np.sign(tx["amount_rur"]) * np.log1p(np.abs(tx["amount_rur"]))
 
-    # Encode small_group (1-based, 0=padding)
     tx["small_group"] = tx["small_group"].fillna(0).astype(str)
     sg_enc = LabelEncoder().fit(tx["small_group"])
 
@@ -215,12 +212,11 @@ def evaluate_downstream(emb_train, y_train, emb_test, y_test, seed):
     return results
 
 
-print("=" * 60)
 print("AGE CoLES (paper config)")
 print(f"  GRU-{AGE_CFG['hidden_size']}, lr={AGE_CFG['lr']}, epochs={AGE_CFG['n_epochs']}")
 print(f"  Metric: accuracy (4-class)")
 print(f"  Seeds: {SEEDS}")
-print("=" * 60)
+
 
 all_results = []
 t0 = time.time()

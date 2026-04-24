@@ -26,7 +26,7 @@ print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-SEEDS = [42]  # single seed for embedding extraction
+SEEDS = [42]
 
 GENDER_CFG = {
     "hidden_size": 1024,
@@ -102,16 +102,13 @@ def load_gender(seed):
 
     tx = tx[tx["customer_id"].isin(labels["customer_id"])].copy()
 
-    # Parse datetime and sort chronologically
     tx["day_float"] = tx["tr_datetime"].apply(parse_tr_datetime)
     tx = tx.sort_values(["customer_id", "day_float"])
 
-    # Log transform amount
     tx["amount"] = np.sign(tx["amount"]) * np.log1p(np.abs(tx["amount"]))
 
     target_map = dict(zip(labels["customer_id"], labels["gender"]))
 
-    # Encode categoricals (1-based, 0=padding)
     encoders = {}
     for col in ["mcc_code", "tr_type"]:
         tx[col] = tx[col].fillna("UNK").astype(str)
@@ -230,11 +227,9 @@ def evaluate_downstream(emb_train, y_train, emb_test, y_test, seed):
     return results
 
 
-print("=" * 60)
 print("GENDER CoLES (paper config)")
 print(f"  GRU-{GENDER_CFG['hidden_size']}, lr={GENDER_CFG['lr']}, epochs={GENDER_CFG['n_epochs']}")
 print(f"  Seeds: {SEEDS}")
-print("=" * 60)
 
 all_results = []
 t0 = time.time()
@@ -258,7 +253,7 @@ for seed in SEEDS:
     emb_test = extract_embeddings(module, test_rec)
     print(f"  embeddings: {emb_train.shape}")
 
-    # Save embeddings for Phase 3
+    # Save embeddings
     np.save(EMB_DIR / f"emb_train_seed{seed}.npy", emb_train)
     np.save(EMB_DIR / f"emb_test_seed{seed}.npy", emb_test)
     np.save(EMB_DIR / f"y_train_seed{seed}.npy", y_train)
@@ -284,9 +279,8 @@ elapsed = time.time() - t0
 df = pd.DataFrame(all_results)
 df.to_csv(OUTPUT_DIR / "gender_coles_per_seed.csv", index=False)
 
-print("\n" + "=" * 60)
 print(f"GENDER RESULTS ({len(SEEDS)} seed(s))")
-print("=" * 60)
+
 for m in ["lgbm", "logreg", "xgboost"]:
     sub = df[df["model"] == m]
     print(f"  {m:<8} AUC = {sub['roc_auc'].mean():.4f} ± {sub['roc_auc'].std():.4f}")

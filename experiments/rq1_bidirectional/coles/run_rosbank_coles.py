@@ -26,9 +26,8 @@ print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-SEEDS = [42]  # single seed for embedding extraction
+SEEDS = [42]
 
-# ---- Original coles-paper config for Rosbank ----
 ROSBANK_CFG = {
     "hidden_size": 1024,
     "rnn_type": "lstm",
@@ -39,26 +38,24 @@ ROSBANK_CFG = {
     "cnt_min": 15,
     "cnt_max": 150,
     "embeddings_noise": 0.0003,
-    "lr_step_size": 10,        # original: step_size=10 (was 30)
+    "lr_step_size": 10,
     "lr_gamma": 0.9025,
-    "trx_dropout": 0.01,       # original: 1% transaction dropout
+    "trx_dropout": 0.01,
 }
 
-# Embedding dims from original paper
 EMB_DIMS = {
-    "mcc_code":     24,   # was 48
-    "channel_type":  4,   # was 16
-    "currency":      4,   # was 16
-    "trx_category":  4,   # was 16
+    "mcc_code":     24, 
+    "channel_type":  4,
+    "currency":      4,
+    "trx_category":  4,
 }
 
-# LGBM from original paper
 LGBM_PARAMS = {
-    "n_estimators": 500,       # was 1000
+    "n_estimators": 500,
     "learning_rate": 0.02,
     "boosting_type": "gbdt",
-    "max_depth": 6,            # was 12
-    "subsample": 0.5,          # was 0.75
+    "max_depth": 6,
+    "subsample": 0.5,
     "subsample_freq": 1,
     "colsample_bytree": 0.75,
     "reg_alpha": 1.0,
@@ -67,10 +64,12 @@ LGBM_PARAMS = {
     "verbosity": -1,
 }
 
-OUTPUT_DIR = Path("results/rosbank_coles_local")
+OUTPUT_DIR = Path("results/rosbank_coles")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+EMB_DIR = Path("embeddings/rosbank")
+EMB_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def download(url, path):
@@ -101,14 +100,11 @@ def load_rosbank(seed):
     tx = df.rename(columns={"cl_id": "customer_id", "MCC": "mcc_code"}).copy()
     tx["mcc_code"] = tx["mcc_code"].fillna(0).astype(int)
 
-    # Parse SAS-format datetime (e.g. "21OCT17:00:00:00") -> proper datetime
     tx["dt"] = pd.to_datetime(tx["TRDATETIME"], format="%d%b%y:%H:%M:%S")
     tx = tx.sort_values(["customer_id", "dt"])
 
-    # Signed log transform for amount (same as original paper preprocessing)
     tx["amount"] = np.sign(tx["amount"]) * np.log1p(np.abs(tx["amount"]))
 
-    # Encode categorical features
     encoders = {}
     for col in ["mcc_code", "channel_type", "currency", "trx_category"]:
         if col in tx.columns:
@@ -120,7 +116,7 @@ def load_rosbank(seed):
 
     ids = labels["customer_id"].values
     targets = np.array([target_map[c] for c in ids])
-    # Original paper uses test_size=0.1
+
     idx_tr, idx_te = train_test_split(
         np.arange(len(ids)), test_size=0.1, random_state=seed, stratify=targets)
 
@@ -136,7 +132,6 @@ def load_rosbank(seed):
             ct = grouped.get_group(cid)
             if len(ct) < 15:
                 continue
-            # event_time as days from first transaction (real temporal gaps)
             dt = ct["dt"].values
             days = (dt - dt[0]) / np.timedelta64(1, "D")
             rec = {
@@ -165,7 +160,7 @@ def build_coles(feature_dims):
 
     trx_encoder = TrxEncoder(
         embeddings=embeddings,
-        numeric_values={"amount": "identity"},  # already log-transformed in preprocessing
+        numeric_values={"amount": "identity"},
         embeddings_noise=cfg["embeddings_noise"],
         use_batch_norm_with_lens=True,
     )
@@ -267,7 +262,6 @@ def evaluate_downstream(X_train, y_train, X_test, y_test, seed):
     return results
 
 
-print("=" * 60)
 print("ROSBANK CoLES (aligned with coles-paper original)")
 print(f"  LSTM-{ROSBANK_CFG['hidden_size']}, lr={ROSBANK_CFG['lr']}, "
       f"epochs={ROSBANK_CFG['n_epochs']}, "
@@ -277,7 +271,6 @@ print(f"  LR scheduler: step={ROSBANK_CFG['lr_step_size']}, gamma={ROSBANK_CFG['
 print(f"  amount: log-transformed, emb dims: {EMB_DIMS}")
 print(f"  test_size=0.1, LGBM: n_est={LGBM_PARAMS['n_estimators']}, max_depth={LGBM_PARAMS['max_depth']}")
 print(f"  Seeds: {SEEDS}")
-print("=" * 60)
 
 all_results = []
 t0 = time.time()
@@ -305,19 +298,17 @@ for seed in SEEDS:
     emb_test = extract_embeddings(module, test_rec)
     print(f"  embeddings: {emb_train.shape}")
 
-    # Save embeddings for Phase 3
-    emb_dir = Path("embeddings/rosbank")
-    emb_dir.mkdir(parents=True, exist_ok=True)
-    np.save(emb_dir / f"emb_train_seed{seed}.npy", emb_train)
-    np.save(emb_dir / f"emb_test_seed{seed}.npy", emb_test)
-    np.save(emb_dir / f"y_train_seed{seed}.npy", y_train)
-    np.save(emb_dir / f"y_test_seed{seed}.npy", y_test)
+    # Save embeddings
+    np.save(EMB_DIR / f"emb_train_seed{seed}.npy", emb_train)
+    np.save(EMB_DIR / f"emb_test_seed{seed}.npy", emb_test)
+    np.save(EMB_DIR / f"y_train_seed{seed}.npy", y_train)
+    np.save(EMB_DIR / f"y_test_seed{seed}.npy", y_test)
     cids_train = [r["customer_id"] for r in train_rec]
     cids_test = [r["customer_id"] for r in test_rec]
-    np.save(emb_dir / f"cids_train_seed{seed}.npy", np.array(cids_train))
-    np.save(emb_dir / f"cids_test_seed{seed}.npy", np.array(cids_test))
+    np.save(EMB_DIR / f"cids_train_seed{seed}.npy", np.array(cids_train))
+    np.save(EMB_DIR / f"cids_test_seed{seed}.npy", np.array(cids_test))
     if seed == SEEDS[0]:
-        print(f"  saved embeddings to {emb_dir}")
+        print(f"  saved embeddings to {EMB_DIR}")
 
     downstream = evaluate_downstream(emb_train, y_train, emb_test, y_test, seed)
 
@@ -351,14 +342,11 @@ for (m, v), g in full_df.groupby(["model", "variant"]):
 agg_df = pd.DataFrame(agg)
 agg_df.to_csv(OUTPUT_DIR / "rosbank_coles_aggregated.csv", index=False)
 
-print("\n" + "=" * 60)
 print(f"ROSBANK RESULTS ({len(SEEDS)} seed(s))")
-print("=" * 60)
 for _, r in agg_df.iterrows():
     print(f"  {r['model']:<8} AUC = {r['roc_auc_mean']:.4f} +/- {r['roc_auc_std']:.4f}")
 
 print(f"\nLiterature CoLES Rosbank: 0.841")
-print(f"Previous run (no amount, wrong config): 0.782")
 print(f"Total time: {elapsed:.0f}s ({elapsed/3600:.1f}h)")
 
 with open(OUTPUT_DIR / "rosbank_summary.json", "w") as f:

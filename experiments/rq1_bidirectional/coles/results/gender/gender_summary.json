@@ -1,0 +1,36 @@
+{
+  "experiment": "CoLES Gender (paper config)",
+  "config": {
+    "hidden_size": 1024,
+    "rnn_type": "gru",
+    "batch_size": 128,
+    "lr": 0.002,
+    "n_epochs": 150,
+    "split_count": 5,
+    "cnt_min": 15,
+    "cnt_max": 75,
+    "embeddings_noise": 0.003,
+    "lr_step_size": 10,
+    "lr_gamma": 0.9025
+  },
+  "emb_dims": {
+    "mcc_code": 48,
+    "tr_type": 24
+  },
+  "lgbm_config": {
+    "n_estimators": 500,
+    "learning_rate": 0.02,
+    "boosting_type": "gbdt",
+    "max_depth": 6,
+    "subsample": 0.5,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.75,
+    "reg_alpha": 1.0,
+    "reg_lambda": 1.0,
+    "min_child_samples": 50,
+    "verbosity": -1
+  },
+  "seeds": [42],
+  "time": null,
+  "date": "reference"
+}
