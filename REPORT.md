@@ -3,8 +3,6 @@
 Экспериментам присвоены номера (**E1.x, E2.x,** и т.д.) для связи с кодом.
 Маппинг номер → скрипт в [`EXPERIMENTS_MAP.md`](EXPERIMENTS_MAP.md).
 
----
-
 ## RQ1: Bidirectional vs Unidirectional
 
 | # | Method | Description | Direction | Gender | Rosbank | Age |
