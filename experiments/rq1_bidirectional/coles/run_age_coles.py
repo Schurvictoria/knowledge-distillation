@@ -32,6 +32,16 @@ _os.environ["PYTHONHASHSEED"] = str(_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
+# ---- Required input files ----
+from pathlib import Path as _P
+_required_inputs = [
+    ("data/train_target.csv", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
+    ("data/transactions_train.csv", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
+]
+for _p, _hint in _required_inputs:
+    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
+# ---- end input check ----
+
 
 print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
 if torch.cuda.is_available():

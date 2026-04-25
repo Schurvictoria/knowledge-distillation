@@ -48,6 +48,17 @@ _os.environ["PYTHONHASHSEED"] = str(_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
+# ---- Required input files ----
+from pathlib import Path as _P
+_required_inputs = [
+    ("data/gender_train.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+    ("data/rosbank_train.csv", "experiments/rq1_bidirectional/coles/run_rosbank_coles.py"),
+    ("data/transactions.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+]
+for _p, _hint in _required_inputs:
+    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
+# ---- end input check ----
+
 
 SEEDS = [42, 123, 456, 789, 1024]
 OUT = Path("results/ramd_kd")

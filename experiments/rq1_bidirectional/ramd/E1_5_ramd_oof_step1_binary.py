@@ -35,6 +35,17 @@ _SEED = 42
 _random.seed(_SEED); np.random.seed(_SEED)
 _os.environ["PYTHONHASHSEED"] = str(_SEED)
 
+# ---- Required input files ----
+from pathlib import Path as _P
+_required_inputs = [
+    ("data/gender_train.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+    ("data/rosbank_train.csv", "experiments/rq1_bidirectional/coles/run_rosbank_coles.py"),
+    ("data/transactions.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+]
+for _p, _hint in _required_inputs:
+    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
+# ---- end input check ----
+
 
 OUT_OOF = Path("results/ramd_openrouter")
 OUT_OOF.mkdir(parents=True, exist_ok=True)

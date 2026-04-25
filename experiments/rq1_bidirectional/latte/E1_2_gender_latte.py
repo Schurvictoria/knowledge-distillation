@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
 True LATTE-style distillation: fine-tune CoLES GRU with contrastive alignment.
-Uses gradient checkpointing to fit in 24GB VRAM.
 
-Unlike previous attempts (adapters on frozen embeddings), this fine-tunes
-the actual sequence encoder through contrastive + classification loss.
-
+Fine-tunes the actual sequence encoder through contrastive + classification loss.
 Saves checkpoints at each stage.
 """
 
@@ -236,10 +233,8 @@ proj_seq = nn.Sequential(nn.Linear(1024, 256), nn.ReLU(), nn.Linear(256, 128)).t
 proj_text = nn.Sequential(nn.Linear(llm_train_t.shape[1], 256), nn.ReLU(), nn.Linear(256, 128)).to(device)
 classifier = nn.Sequential(nn.Linear(1024, 256), nn.ReLU(), nn.Dropout(0.3), nn.Linear(256, 1)).to(device)
 
-# Enable gradient checkpointing on GRU to save VRAM
-if hasattr(seq_encoder, 'seq_encoder'):
-    seq_encoder.seq_encoder.flatten_parameters = lambda: None  # Disable for checkpointing
-
+# α=0.1 is canonical for E1.2 (matches REPORT.md=0.8674 for Gender).
+# α-sweep ablation in: ablations/E1_2_gender_latte_alpha_ablation.py
 for alpha in [0.1]:
     print(f"\n--- Fine-tune α={alpha} ---")
 

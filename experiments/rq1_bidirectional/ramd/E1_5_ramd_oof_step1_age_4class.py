@@ -24,6 +24,18 @@ _SEED = 42
 _random.seed(_SEED); np.random.seed(_SEED)
 _os.environ["PYTHONHASHSEED"] = str(_SEED)
 
+# ---- Required input files ----
+from pathlib import Path as _P
+_required_inputs = [
+    ("data/transactions_train.csv", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
+    ("embeddings/age/cids_train_seed42.npy", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
+    ("embeddings/age/emb_train_seed42.npy", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
+    ("embeddings/age/y_train_seed42.npy", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
+]
+for _p, _hint in _required_inputs:
+    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
+# ---- end input check ----
+
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OUT_OOF = Path("results/ramd_openrouter")

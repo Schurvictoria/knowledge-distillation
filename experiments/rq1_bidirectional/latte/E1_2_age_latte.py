@@ -181,6 +181,8 @@ proj_seq = nn.Sequential(nn.Linear(800, 256), nn.ReLU(), nn.Linear(256, 128)).to
 proj_text = nn.Sequential(nn.Linear(llm_train_t.shape[1], 256), nn.ReLU(), nn.Linear(256, 128)).to(device)
 classifier = nn.Sequential(nn.Linear(800, 256), nn.ReLU(), nn.Dropout(0.3), nn.Linear(256, 4)).to(device)
 
+# α=0.1 is canonical for E1.2 (matches REPORT.md=0.6429 for Age).
+# α-sweep ablation only run on Gender (see ablations/E1_2_gender_latte_alpha_ablation.py).
 for alpha in [0.1]:
     print(f"\n--- α={alpha} ---")
     seq_encoder.load_state_dict(torch.load(COLES_CKPT, map_location=device))

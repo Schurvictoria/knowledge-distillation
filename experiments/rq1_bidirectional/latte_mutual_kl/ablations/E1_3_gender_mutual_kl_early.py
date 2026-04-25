@@ -27,6 +27,19 @@ _os.environ["PYTHONHASHSEED"] = str(SEED)
 _torch.backends.cudnn.deterministic = True
 _torch.backends.cudnn.benchmark = False
 
+# ---- Required input files ----
+from pathlib import Path as _P
+_required_inputs = [
+    ("embeddings/gender/emb_test_seed42.npy", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+    ("embeddings/gender/emb_train_seed42.npy", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+    ("embeddings/gender/y_test_seed42.npy", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+    ("embeddings/gender/y_train_seed42.npy", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
+    ("results/gender_llm4es/llm4es_embeddings.npz", "experiments/rq2_d1_teacher_signals/feature_based/E2_2_gender_llm4es.py"),
+]
+for _p, _hint in _required_inputs:
+    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
+# ---- end input check ----
+
 
 import numpy as np
 import pandas as pd
