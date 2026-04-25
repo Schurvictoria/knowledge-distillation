@@ -152,16 +152,26 @@ for i, cid in enumerate(eval_cids):
 print(f"  kNN: {len(knn_contexts)} contexts")
 
 # ---- Serialization ----
-def serialize_client(cid, max_txns=30):
+def serialize_client(cid, max_txns=None):
     if cid not in grouped.groups: return "No transactions."
-    ct = grouped.get_group(cid).tail(max_txns)
+    ct = grouped.get_group(cid)
+    if max_txns is not None:
+        ct = ct.tail(max_txns)
     n = len(ct)
     amt = np.abs(ct["amount_rur"].values)
-    cats = ct["small_group"].fillna(0).astype(int).apply(mcc_cat).value_counts()
-    top = ", ".join(f"{c} ({n_})" for c, n_ in cats.head(6).items())
-    return (f"Client with {n} transactions across {cats.nunique()} categories. "
-            f"Avg amount: {amt.mean():.0f}, median: {np.median(amt):.0f}. "
-            f"Top categories: {top}.")
+    cats = ct["small_group"].fillna(0).value_counts()
+    n_unique_cats = cats.nunique()
+    top = ", ".join(f"cat{int(c)} ({n_})" for c, n_ in cats.head(6).items())
+    days_span = int(ct["trans_date"].max() - ct["trans_date"].min()) if len(ct) > 1 else 0
+    months = max(1, days_span // 30)
+    micro_pct = int((amt < 500).sum() * 100 // max(n, 1))
+    large_pct = int((amt > 5000).sum() * 100 // max(n, 1))
+    return (f"Client profile:\n"
+            f"- Transactions: {n} over {months} months ({max(1, n // months)}/month)\n"
+            f"- Spending: avg {amt.mean():.0f} RUB, median {np.median(amt):.0f}, max {amt.max():.0f}\n"
+            f"- Transaction size: {micro_pct}% small (<500 RUB), {large_pct}% large (>5000 RUB)\n"
+            f"- Category diversity: {n_unique_cats} unique categories\n"
+            f"- Top categories: {top}")
 
 # ---- LLM inference ----
 print("\nLoading LLM...")
@@ -232,13 +242,30 @@ def predict_class(messages):
     del inputs
     return int(np.argmax(class_probs))
 
-SYSTEM_BASE = ("You are a bank analyst predicting client age group from transaction patterns. "
-               "Categories: young (under 25), adult (25-35), middle-aged (35-55), senior (over 55). "
-               "Answer with one word: young, adult, middle, or senior.")
+_AGE_PATTERNS = (
+    "Age-related transaction patterns:\n"
+    "- young (under 25): many small transactions (<500 RUB), high category diversity (10+ types), "
+    "high frequency (20+ txns/month), spread across entertainment and food\n"
+    "- adult (25-35): moderate frequency (10-20/month), mix of small and medium amounts, "
+    "diverse but structured spending\n"
+    "- middle-aged (35-55): higher average amounts, concentrated in fewer categories (5-8), "
+    "regular patterns, 8-15 txns/month\n"
+    "- senior (over 55): low frequency (<10/month), very concentrated spending (2-4 categories), "
+    "higher per-transaction amounts, habitual patterns"
+)
 
-SYSTEM_COT = ("You are a bank analyst predicting client age group. You have the client's transactions "
-              "AND analysis from machine learning models. Use all available evidence. "
-              "Think step by step, then answer: young, adult, middle, or senior.")
+SYSTEM_BASE = (
+    "You are a bank analyst predicting client age group from transaction patterns.\n"
+    f"{_AGE_PATTERNS}\n"
+    "Answer with one word: young, adult, middle, or senior."
+)
+
+SYSTEM_COT = (
+    "You are a bank analyst predicting client age group. You have the client's transactions "
+    "AND analysis from machine learning models.\n"
+    f"{_AGE_PATTERNS}\n"
+    "Think step by step, then answer: young, adult, middle, or senior."
+)
 
 # ---- Run all variants ----
 variants = {

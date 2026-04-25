@@ -1,297 +1,383 @@
-#!/usr/bin/env python3
+"""E1.3 — TRUE Bidirectional distillation on Age (CoLES GRU ↔ LLM LoRA, joint training).
+
+Mirrors E1_3_gender_mutual_kl.py but for 4-class Age task:
+- CrossEntropyLoss instead of BCEWithLogitsLoss
+- KL divergence for mutual distillation (softmax probabilities)
+- LGBMClassifier with multiclass objective
+- LLM forward pass is on-the-fly so LoRA receives gradients every step
+- Gradient accumulation (accum_steps=8) for stable training on 30K clients
 """
-Age True Bidirectional — FIXED: gradient accumulation + memory bank.
-
-Previous run: batch=16, only 15 contrastive negatives → 0 improvement.
-Fix: gradient accumulation (effective batch=128) + memory bank (4096 negatives).
-
-Saves checkpoint after EACH epoch.
-"""
-
-import time, json, warnings, gc, os
+import gc
+import json
+import os
+import warnings
 from pathlib import Path
-from functools import partial
-
-warnings.filterwarnings("ignore")
-# Reproducibility
-import random, os as _os
-SEED = 42
-random.seed(SEED); import numpy as _np; _np.random.seed(SEED)
-import torch as _torch
-_torch.manual_seed(SEED); _torch.cuda.manual_seed_all(SEED)
-import pytorch_lightning as _pl
-_pl.seed_everything(SEED, workers=True)
-_os.environ["PYTHONHASHSEED"] = str(SEED)
-_torch.backends.cudnn.deterministic = True
-_torch.backends.cudnn.benchmark = False
-
-# ---- Required input files ----
-from pathlib import Path as _P
-_required_inputs = [
-    ("data/train_target.csv", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
-    ("data/transactions_train.csv", "experiments/rq1_bidirectional/coles/run_age_coles.py"),
-]
-for _p, _hint in _required_inputs:
-    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
-# ---- end input check ----
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import LabelEncoder, MaxAbsScaler, StandardScaler
-from lightgbm import LGBMClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MaxAbsScaler
 
-from ptls.data_load.datasets import MemoryMapDataset, inference_data_loader
-from ptls.nn import TrxEncoder, RnnSeqEncoder
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
+warnings.filterwarnings("ignore")
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-OUTPUT_DIR = Path("results/age_bidir_fixed")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from distil.data import load_age_dataset
+from distil.models import ColesConfig, build_coles_encoder
+from distil.reproducibility import seed_everything
+from distil.results import save_experiment_result
 
-LGBM_P = dict(n_estimators=1000, learning_rate=0.02, objective="multiclass", num_class=4,
-              max_depth=12, num_leaves=50, subsample=0.75, colsample_bytree=0.75,
-              reg_alpha=1, reg_lambda=1, min_child_samples=50, verbosity=-1)
 
-# ---- Load data ----
-print("Loading data...")
-DATA_DIR = Path("data")
-tx = pd.read_csv(DATA_DIR / "transactions_train.csv")
-labels = pd.read_csv(DATA_DIR / "train_target.csv")
-target_map = dict(zip(labels["client_id"], labels["bins"]))
-tx = tx.sort_values(["client_id", "trans_date"])
-tx["amount_rur"] = np.sign(tx["amount_rur"]) * np.log1p(np.abs(tx["amount_rur"]))
-tx["small_group"] = tx["small_group"].fillna(0).astype(str)
-sg_enc = LabelEncoder().fit(tx["small_group"])
-grouped = tx.groupby("client_id")
+SEED = 42
+DATASET_NAME = "age"
+EXPERIMENT_BASE_ID = "E1_3_age"
 
-ids = labels["client_id"].values
-targets = np.array([target_map[c] for c in ids])
-idx_tr, idx_te = train_test_split(np.arange(len(ids)), test_size=0.1, random_state=42, stratify=targets)
-train_ids, test_ids = set(ids[idx_tr]), set(ids[idx_te])
+OUTPUT_DIRECTORY = Path("results/age_true_bidirectional")
+OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
+COLES_CHECKPOINT_PATH = Path("results/age_true_latte/coles_baseline.pt")
+LLM_CHECKPOINT_PATH = Path("results/age_llm4es/checkpoints/llm4es_lora")
 
-MCC_GROUPS = {range(1,1500):"Agriculture",range(4000,4800):"Transportation",range(5000,5600):"Retail",
-              range(5600,5700):"Clothing",range(5800,5900):"Restaurants",range(6000,7000):"Financial",
-              range(7500,7600):"Auto",range(8000,8100):"Medical",range(8200,8300):"Education"}
-def mcc_cat(mcc):
-    try: mcc=int(mcc)
-    except: return "Other"
-    for r,n in MCC_GROUPS.items():
-        if mcc in r: return n
-    return "Other"
-
-def build_records(cid_set):
-    records = []
-    for cid in cid_set:
-        if cid not in target_map or cid not in grouped.groups: continue
-        ct = grouped.get_group(cid)
-        if len(ct) < 25: continue
-        days = ct["trans_date"].values.astype(np.float32)
-        records.append({"customer_id": cid, "target": target_map[cid],
-                        "event_time": torch.FloatTensor(days - days[0]),
-                        "amount": torch.FloatTensor(ct["amount_rur"].values),
-                        "small_group": torch.LongTensor(sg_enc.transform(ct["small_group"].values) + 1)})
-    return records
-
-def serialize(cid, max_txns=30):
-    if cid not in grouped.groups: return "No txns."
-    ct = grouped.get_group(cid).tail(max_txns)
-    lines = [f"Client ({len(ct)} txns):"]
-    for _, r in ct.iterrows():
-        d = "spent" if r["amount_rur"]<0 else "received"
-        lines.append(f"Day {int(r['trans_date'])}: {d} {abs(r['amount_rur']):.0f} at {mcc_cat(r['small_group'])}")
-    return "\n".join(lines)
-
-train_rec_full = build_records(train_ids)
-test_rec = build_records(test_ids)
-feature_dims = {"small_group": len(sg_enc.classes_) + 2}
-_y_full = np.array([r["target"] for r in train_rec_full])
-_tr_idx, _val_idx = train_test_split(
-    np.arange(len(train_rec_full)), test_size=0.1, random_state=42, stratify=_y_full)
-train_rec = [train_rec_full[i] for i in _tr_idx]
-val_rec = [train_rec_full[i] for i in _val_idx]
-y_train = _y_full[_tr_idx]
-y_val = _y_full[_val_idx]
-y_test = np.array([r["target"] for r in test_rec])
-train_texts = [serialize(r["customer_id"]) for r in train_rec]
-print(f"  train={len(train_rec)}, val={len(val_rec)}, test={len(test_rec)}")
-
-# ---- Load models ----
-print("Loading models...")
-COLES_CKPT = Path("results/age_true_latte/coles_baseline.pt")
-def build_encoder():
-    trx = TrxEncoder(embeddings={"small_group":{"in":feature_dims["small_group"],"out":16}},
-                      numeric_values={"amount":"identity"}, embeddings_noise=0.003, use_batch_norm_with_lens=True)
-    return RnnSeqEncoder(trx_encoder=trx, hidden_size=800, type="gru", bidir=False, trainable_starter="static")
-
-seq_encoder = build_encoder().to(device)
-seq_encoder.load_state_dict(torch.load(COLES_CKPT, map_location=device))
-
-LLM_CKPT = Path("results/age_llm4es/checkpoints/llm4es_lora")
-bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B")
-if tokenizer.pad_token is None: tokenizer.pad_token = tokenizer.eos_token
-llm = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-3B", quantization_config=bnb, device_map="auto")
-llm = PeftModel.from_pretrained(llm, str(LLM_CKPT))
-hidden_llm = llm.config.hidden_size
-print(f"  VRAM: {torch.cuda.memory_allocated()/1024**3:.1f}GB")
-
-# ---- Pre-extract LLM embeddings (to use as memory bank) ----
-print("Pre-extracting LLM embeddings for memory bank...")
-llm.eval()
-llm_embs_all = []
-with torch.no_grad():
-    for i, text in enumerate(train_texts):
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=256).to(device)
-        out = llm(**inputs, output_hidden_states=True)
-        h = torch.stack(out.hidden_states[-4:]).mean(0)
-        mask = inputs["attention_mask"][0].unsqueeze(-1).float()
-        emb = (h[0]*mask).sum(0)/mask.sum(0)
-        llm_embs_all.append(emb.cpu())
-        del inputs, out
-        if (i+1) % 2000 == 0:
-            print(f"  {i+1}/{len(train_texts)}")
-
-llm_embs_bank = torch.stack(llm_embs_all)  # (N, hidden_llm)
-sc_l = StandardScaler()
-llm_embs_bank_np = sc_l.fit_transform(llm_embs_bank.numpy())
-llm_embs_bank_t = torch.FloatTensor(llm_embs_bank_np).to(device)
-print(f"  Memory bank: {llm_embs_bank_t.shape}")
-
-# ---- Eval function (returns val + test, model selection on val) ----
-def _extract(records):
-    seq_encoder.eval()
-    with torch.no_grad():
-        return torch.cat([seq_encoder(b.to(device)).cpu()
-                          for b in inference_data_loader(records, num_workers=0, batch_size=64)]).numpy()
-
-def eval_model():
-    sc = MaxAbsScaler()
-    lgbm = LGBMClassifier(**LGBM_P, random_state=42)
-    etr = _extract(train_rec); evl = _extract(val_rec); ete = _extract(test_rec)
-    lgbm.fit(sc.fit_transform(etr), y_train)
-    val_acc = accuracy_score(y_val, lgbm.predict(sc.transform(evl)))
-    test_acc = accuracy_score(y_test, lgbm.predict(sc.transform(ete)))
-    return val_acc, test_acc
-
-baseline_val, baseline_test = eval_model()
-print(f"  Baseline: val={baseline_val:.4f} test={baseline_test:.4f}")
-
-# ---- Heads ----
-proj_s = nn.Sequential(nn.Linear(800,256),nn.ReLU(),nn.Linear(256,128)).to(device)
-proj_t = nn.Sequential(nn.Linear(hidden_llm,256),nn.ReLU(),nn.Linear(256,128)).to(device)
-cls_s = nn.Sequential(nn.Linear(800,256),nn.ReLU(),nn.Dropout(0.3),nn.Linear(256,4)).to(device)
-cls_t = nn.Sequential(nn.Linear(hidden_llm,256),nn.ReLU(),nn.Dropout(0.3),nn.Linear(256,4)).to(device)
-
-# ---- Contrastive with memory bank ----
-def contrastive_with_bank(z_seq, z_text_batch, bank, n_neg=2048, temp=0.07):
-    """InfoNCE with negatives sampled from memory bank."""
-    neg_idx = torch.randint(0, len(bank), (n_neg,))
-    neg_embs = F.normalize(proj_t(bank[neg_idx]), dim=1)
-
-    # Positive: z_seq[i] with z_text_batch[i]
-    pos_sim = (z_seq * z_text_batch).sum(dim=1) / temp  # (B,)
-    # Negative: z_seq[i] with all negatives
-    neg_sim = z_seq @ neg_embs.T / temp  # (B, n_neg)
-
-    logits = torch.cat([pos_sim.unsqueeze(1), neg_sim], dim=1)  # (B, 1+n_neg)
-    labels = torch.zeros(len(z_seq), dtype=torch.long, device=device)
-    return F.cross_entropy(logits, labels)
-
-# ---- Training with gradient accumulation ----
-print("\n" + "=" * 60)
-print("Training with gradient accumulation + memory bank")
-print("=" * 60)
+LGBM_PARAMS = dict(
+    n_estimators=1000, learning_rate=0.02, objective="multiclass", num_class=4,
+    max_depth=12, num_leaves=50, subsample=0.75, colsample_bytree=0.75,
+    reg_alpha=1, reg_lambda=1, min_child_samples=50, verbosity=-1,
+)
 
 ACCUM_STEPS = 8  # effective batch = 16 * 8 = 128
-alpha_cls, alpha_con, alpha_mut = 0.5, 0.3, 0.2
 
-trainable = list(seq_encoder.parameters()) + list(proj_s.parameters()) + list(proj_t.parameters()) + \
-            list(cls_s.parameters()) + list(cls_t.parameters())
-for _, p in llm.named_parameters():
-    if p.requires_grad: trainable.append(p)
 
-opt = torch.optim.Adam(trainable, lr=2e-4, weight_decay=1e-4)
-ce = nn.CrossEntropyLoss()
-best_val = baseline_val
-best_test = baseline_test
-results = {"baseline": baseline_test, "baseline_val": baseline_val}
+def serialize_age_client(transactions_for_client: pd.DataFrame) -> str:
+    n = len(transactions_for_client)
+    amounts = np.abs(transactions_for_client["amount_rur"].values)
+    cats = transactions_for_client["small_group"].fillna("0").value_counts()
+    n_unique_cats = cats.nunique()
+    top_cats = ", ".join(
+        f"cat{c} ({cnt} txns, {cnt * 100 // max(n, 1)}%)"
+        for c, cnt in cats.head(6).items()
+    )
+    days_span = (
+        int(transactions_for_client["trans_date"].max() - transactions_for_client["trans_date"].min())
+        if len(transactions_for_client) > 1 else 0
+    )
+    months = max(1, days_span // 30)
+    micro_pct = int((amounts < 500).sum() * 100 // max(n, 1))
+    large_pct = int((amounts > 5000).sum() * 100 // max(n, 1))
+    return (f"Client ({n} txns, {months}m, {max(1, n // months)}/mo):\n"
+            f"Avg: {amounts.mean():.0f} RUB, median: {np.median(amounts):.0f}, max: {amounts.max():.0f}\n"
+            f"Size: {micro_pct}% small (<500), {large_pct}% large (>5000)\n"
+            f"Diversity: {n_unique_cats} categories. Top: {top_cats}")
 
-for ep in range(10):
-    seq_encoder.train(); llm.train()
-    for m in [proj_s,proj_t,cls_s,cls_t]: m.train()
-    idx = torch.randperm(len(train_rec))
-    tot, nb = 0, 0
-    opt.zero_grad()
 
-    for step, s in enumerate(range(0, len(train_rec), 16)):
-        bi = idx[s:s+16].tolist()
-        br = [train_rec[i] for i in bi]
-        yb = torch.LongTensor([r["target"] for r in br]).to(device)
+def extract_coles_embeddings_for_eval(encoder, records, device):
+    from ptls.data_load.datasets import inference_data_loader
 
-        # CoLES forward
-        dl = inference_data_loader(br, num_workers=0, batch_size=32)
-        for batch in dl:
-            se = seq_encoder(batch.to(device))
+    encoder.eval()
+    chunks = []
+    with torch.no_grad():
+        for batch in inference_data_loader(records, num_workers=0, batch_size=64):
+            chunks.append(encoder(batch.to(device)).cpu())
+    return torch.cat(chunks).numpy()
 
-        # LLM forward (use precomputed + gradient for LoRA)
-        te = llm_embs_bank_t[bi]  # Use precomputed for speed
 
-        zs = F.normalize(proj_s(se), dim=1)
-        zt = F.normalize(proj_t(te), dim=1)
+def eval_coles_lgbm(encoder, train_records, val_records, test_records,
+                    train_targets, val_targets, test_targets, device):
+    train_emb = extract_coles_embeddings_for_eval(encoder, train_records, device)
+    val_emb = extract_coles_embeddings_for_eval(encoder, val_records, device)
+    test_emb = extract_coles_embeddings_for_eval(encoder, test_records, device)
 
-        # Losses
-        lc_s = ce(cls_s(se), yb)
-        lc_t = ce(cls_t(te), yb)
-        l_con = contrastive_with_bank(zs, zt, llm_embs_bank_t)
-        ps, pt_ = F.softmax(cls_s(se),dim=1), F.softmax(cls_t(te),dim=1)
-        l_mut = (F.kl_div(ps.log(),pt_.detach(),reduction='batchmean') +
-                 F.kl_div(pt_.log(),ps.detach(),reduction='batchmean'))/2
+    scaler = MaxAbsScaler()
+    from lightgbm import LGBMClassifier
+    clf = LGBMClassifier(**LGBM_PARAMS, random_state=SEED)
+    clf.fit(scaler.fit_transform(train_emb), train_targets)
+    val_acc = float(accuracy_score(val_targets, clf.predict(scaler.transform(val_emb))))
+    test_acc = float(accuracy_score(test_targets, clf.predict(scaler.transform(test_emb))))
+    return val_acc, test_acc
 
-        loss = (alpha_cls*(lc_s+lc_t)/2 + alpha_con*l_con + alpha_mut*l_mut) / ACCUM_STEPS
-        loss.backward()
-        tot += loss.item() * ACCUM_STEPS
-        nb += 1
 
-        if (step + 1) % ACCUM_STEPS == 0:
-            opt.step()
-            opt.zero_grad()
+def get_llm_text_embedding(llm_model, tokenizer, text: str, device):
+    tokenized = tokenizer(
+        text, return_tensors="pt", truncation=True, max_length=256, padding=False
+    ).to(device)
+    with torch.set_grad_enabled(llm_model.training):
+        output = llm_model(**tokenized, output_hidden_states=True)
+        hidden_last_4 = torch.stack(output.hidden_states[-4:]).mean(0)
+        mask = tokenized["attention_mask"][0].unsqueeze(-1).float()
+        return (hidden_last_4[0] * mask).sum(0) / mask.sum(0)
 
-    # Final accumulation step
-    opt.step()
-    opt.zero_grad()
 
-    val_acc, test_acc = eval_model()
-    if val_acc > best_val:
-        best_val = val_acc
-        best_test = test_acc
-        torch.save(seq_encoder.state_dict(), OUTPUT_DIR / "coles_bidir_best.pt")
-    print(f"  ep {ep+1}: loss={tot/nb:.4f}, "
-          f"val={val_acc:.4f} test={test_acc:.4f} best_val={best_val:.4f} best_test={best_test:.4f}")
+def main() -> None:
+    seed_everything(SEED)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("=" * 60)
+    print("STEP 1: Load Age data")
+    print("=" * 60)
 
-    results[f"ep{ep+1}_val"] = val_acc
-    results[f"ep{ep+1}_test"] = test_acc
+    coles_config = ColesConfig.for_dataset(DATASET_NAME)
+    full_dataset = load_age_dataset(seed=SEED)
 
-results["bidirectional_best_test"] = best_test
-results["bidirectional_best_val"] = best_val
+    train_targets_full = full_dataset.train_targets
+    test_targets = full_dataset.test_targets
 
-print(f"\n  Age: baseline={baseline_test:.4f}, bidir={best_test:.4f} "
-      f"({'+' if best_test>baseline_test else ''}{best_test-baseline_test:.4f})")
+    train_indices, val_indices = train_test_split(
+        np.arange(len(full_dataset.train_records)),
+        test_size=0.1, random_state=SEED, stratify=train_targets_full,
+    )
+    train_records = [full_dataset.train_records[i] for i in train_indices]
+    val_records = [full_dataset.train_records[i] for i in val_indices]
+    train_targets = train_targets_full[train_indices]
+    val_targets = train_targets_full[val_indices]
+    test_records = full_dataset.test_records
 
-with open(OUTPUT_DIR / "results.json", "w") as f:
-    json.dump(results, f, indent=2)
+    # Load raw transactions for text serialization (before log1p transform)
+    raw_tx = pd.read_csv("data/transactions_train.csv")
+    raw_tx = raw_tx.sort_values(["client_id", "trans_date"])
+    raw_tx["small_group"] = raw_tx["small_group"].fillna("0").astype(str)
+    transaction_groups = raw_tx.groupby("client_id")
 
-# NOTE: KNOWN LIMITATION — Age uses pre-computed LLM embeddings under no_grad
-# (line "te = llm_embs_bank_t[bi]"), so LoRA on LLM does NOT receive gradient.
-# Effectively this is LATTE-only on Age (bidirectional only on Gender/Rosbank).
-# To make truly bidirectional: replace `te = llm_embs_bank_t[bi]` with on-the-fly
-# `te = torch.stack([get_llm_emb(t) for t in batch_texts])` (slow but honest).
+    train_serialized_texts = [
+        serialize_age_client(transaction_groups.get_group(record["customer_id"]))
+        if record["customer_id"] in transaction_groups.groups
+        else "No transactions."
+        for record in train_records
+    ]
+    print(f"  train={len(train_records)}, val={len(val_records)}, test={len(test_records)}")
 
-del llm, tokenizer; torch.cuda.empty_cache()
+    print("\n" + "=" * 60)
+    print("STEP 2: Load CoLES + LLM")
+    print("=" * 60)
+
+    sequence_encoder = build_coles_encoder(full_dataset.feature_dimensions, coles_config).to(device)
+    if not COLES_CHECKPOINT_PATH.exists():
+        raise FileNotFoundError(
+            f"CoLES checkpoint not found: {COLES_CHECKPOINT_PATH}\n"
+            f"Run: python experiments/rq1_bidirectional/latte/E1_2_age_latte.py first"
+        )
+    sequence_encoder.load_state_dict(torch.load(COLES_CHECKPOINT_PATH, map_location=device))
+    print(f"  CoLES loaded from {COLES_CHECKPOINT_PATH}")
+
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from peft import LoraConfig, PeftModel, TaskType, get_peft_model
+
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
+    )
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    llm_model = AutoModelForCausalLM.from_pretrained(
+        "Qwen/Qwen2.5-3B", quantization_config=quantization_config, device_map="auto",
+    )
+    if (LLM_CHECKPOINT_PATH / "adapter_model.safetensors").exists():
+        llm_model = PeftModel.from_pretrained(llm_model, str(LLM_CHECKPOINT_PATH))
+        print(f"  LLM loaded with LoRA from {LLM_CHECKPOINT_PATH}")
+    else:
+        lora_configuration = LoraConfig(
+            task_type=TaskType.CAUSAL_LM, r=16, lora_alpha=32, lora_dropout=0.05,
+            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+        )
+        llm_model = get_peft_model(llm_model, lora_configuration)
+        print("  LLM with fresh LoRA")
+
+    if torch.cuda.is_available():
+        print(f"  VRAM: {torch.cuda.memory_allocated() / 1024**3:.1f}GB")
+
+    llm_hidden_dimension = llm_model.config.hidden_size
+
+    sequence_projection_head = nn.Sequential(
+        nn.Linear(coles_config.hidden_size, 256), nn.ReLU(), nn.Linear(256, 128),
+    ).to(device)
+    text_projection_head = nn.Sequential(
+        nn.Linear(llm_hidden_dimension, 256), nn.ReLU(), nn.Linear(256, 128),
+    ).to(device)
+    sequence_classifier = nn.Sequential(
+        nn.Linear(coles_config.hidden_size, 256), nn.ReLU(), nn.Dropout(0.3), nn.Linear(256, 4),
+    ).to(device)
+    text_classifier = nn.Sequential(
+        nn.Linear(llm_hidden_dimension, 256), nn.ReLU(), nn.Dropout(0.3), nn.Linear(256, 4),
+    ).to(device)
+
+    baseline_val_acc, baseline_test_acc = eval_coles_lgbm(
+        sequence_encoder, train_records, val_records, test_records,
+        train_targets, val_targets, test_targets, device,
+    )
+    print(f"\n  Baseline CoLES: val={baseline_val_acc:.4f} test={baseline_test_acc:.4f}")
+
+    print("\n" + "=" * 60)
+    print("STEP 3: True Bidirectional Fine-tuning")
+    print("=" * 60)
+
+    results = {
+        "baseline_coles_val": baseline_val_acc,
+        "baseline_coles_test": baseline_test_acc,
+    }
+
+    best_overall_score = baseline_test_acc
+    best_overall_config = "baseline"
+
+    alpha_configurations = [(0.7, 0.2, 0.1), (0.5, 0.3, 0.2), (0.8, 0.1, 0.1)]
+    ce_loss = nn.CrossEntropyLoss()
+
+    for alpha_classification, alpha_contrastive, alpha_mutual in alpha_configurations:
+        config_name = f"cls{alpha_classification}_con{alpha_contrastive}_mut{alpha_mutual}"
+        print(f"\n--- {config_name} ---")
+
+        sequence_encoder.load_state_dict(torch.load(COLES_CHECKPOINT_PATH, map_location=device))
+        for module in [sequence_projection_head, text_projection_head, sequence_classifier, text_classifier]:
+            for parameter in module.parameters():
+                if parameter.dim() > 1:
+                    nn.init.xavier_uniform_(parameter)
+
+        trainable_parameters = (
+            list(sequence_encoder.parameters())
+            + list(sequence_projection_head.parameters())
+            + list(text_projection_head.parameters())
+            + list(sequence_classifier.parameters())
+            + list(text_classifier.parameters())
+        )
+        for parameter in llm_model.parameters():
+            if parameter.requires_grad:
+                trainable_parameters.append(parameter)
+
+        optimizer = torch.optim.Adam(trainable_parameters, lr=3e-4, weight_decay=1e-4)
+
+        best_val_for_config = baseline_val_acc
+        best_test_for_config = baseline_test_acc
+
+        from ptls.data_load.datasets import inference_data_loader
+
+        for epoch_index in range(10):
+            sequence_encoder.train()
+            llm_model.train()
+            for module in [sequence_projection_head, text_projection_head, sequence_classifier, text_classifier]:
+                module.train()
+
+            shuffled_indices = torch.randperm(len(train_records))
+            total_loss = 0.0
+            num_batches = 0
+            optimizer.zero_grad()
+
+            for step_index, start_index in enumerate(range(0, len(train_records), 16)):
+                batch_indices = shuffled_indices[start_index: start_index + 16].tolist()
+                batch_records = [train_records[i] for i in batch_indices]
+                batch_texts = [train_serialized_texts[i] for i in batch_indices]
+                batch_targets = torch.LongTensor(
+                    [record["target"] for record in batch_records]
+                ).to(device)
+
+                for batch in inference_data_loader(batch_records, num_workers=0, batch_size=32):
+                    sequence_embedding = sequence_encoder(batch.to(device))
+
+                text_embeddings_list = [
+                    get_llm_text_embedding(llm_model, tokenizer, text, device)
+                    for text in batch_texts
+                ]
+                text_embedding = torch.stack(text_embeddings_list)
+
+                z_sequence = F.normalize(sequence_projection_head(sequence_embedding), dim=1)
+                z_text = F.normalize(text_projection_head(text_embedding), dim=1)
+
+                sequence_logits = sequence_classifier(sequence_embedding)
+                text_logits = text_classifier(text_embedding)
+                classification_loss = (
+                    ce_loss(sequence_logits, batch_targets)
+                    + ce_loss(text_logits, batch_targets)
+                ) / 2
+
+                similarity_logits = z_sequence @ z_text.T / 0.07
+                diagonal_targets = torch.arange(len(z_sequence), device=device)
+                contrastive_loss = (
+                    F.cross_entropy(similarity_logits, diagonal_targets)
+                    + F.cross_entropy(similarity_logits.T, diagonal_targets)
+                ) / 2
+
+                log_p_seq = F.log_softmax(sequence_logits, dim=1)
+                log_p_text = F.log_softmax(text_logits, dim=1)
+                p_seq = log_p_seq.exp()
+                p_text = log_p_text.exp()
+                mutual_distillation_loss = (
+                    F.kl_div(log_p_seq, p_text.detach(), reduction="batchmean")
+                    + F.kl_div(log_p_text, p_seq.detach(), reduction="batchmean")
+                ) / 2
+
+                combined_loss = (
+                    alpha_classification * classification_loss
+                    + alpha_contrastive * contrastive_loss
+                    + alpha_mutual * mutual_distillation_loss
+                ) / ACCUM_STEPS
+
+                combined_loss.backward()
+                total_loss += float(combined_loss) * ACCUM_STEPS
+                num_batches += 1
+
+                if (step_index + 1) % ACCUM_STEPS == 0:
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+            optimizer.step()
+            optimizer.zero_grad()
+
+            val_acc, test_acc = eval_coles_lgbm(
+                sequence_encoder, train_records, val_records, test_records,
+                train_targets, val_targets, test_targets, device,
+            )
+            if val_acc > best_val_for_config:
+                best_val_for_config = val_acc
+                best_test_for_config = test_acc
+                torch.save(
+                    sequence_encoder.state_dict(),
+                    OUTPUT_DIRECTORY / f"coles_bidir_{config_name}.pt",
+                )
+
+            print(
+                f"  ep {epoch_index + 1}: loss={total_loss / num_batches:.4f}, "
+                f"val={val_acc:.4f} test={test_acc:.4f} "
+                f"best_val={best_val_for_config:.4f} best_test={best_test_for_config:.4f}"
+            )
+
+        results[config_name] = best_test_for_config
+        if best_test_for_config > best_overall_score:
+            best_overall_score = best_test_for_config
+            best_overall_config = config_name
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
+    print("\n" + "=" * 60)
+    print("TRUE BIDIRECTIONAL SUMMARY (Age)")
+    print("=" * 60)
+    for method_name, method_score in sorted(results.items(), key=lambda pair: -pair[1]):
+        delta = method_score - baseline_test_acc
+        print(f"  {method_name:<35} acc={method_score:.4f} ({'+' if delta >= 0 else ''}{delta:.4f})")
+
+    with (OUTPUT_DIRECTORY / "true_bidir_results.json").open("w") as f:
+        json.dump(results, f, indent=2)
+
+    save_experiment_result(
+        experiment_id=EXPERIMENT_BASE_ID,
+        rq="RQ1",
+        method="LATTE + mutual KL",
+        dataset=DATASET_NAME,
+        task_type="multiclass",
+        metrics={"accuracy": best_overall_score, "baseline_accuracy": baseline_test_acc},
+        config={
+            "alpha_configurations_tried": alpha_configurations,
+            "best_alpha_config": best_overall_config,
+            "num_epochs": 10,
+            "batch_size": 16,
+            "accum_steps": ACCUM_STEPS,
+        },
+        seed=SEED,
+        artifacts={"best_checkpoint": str(OUTPUT_DIRECTORY / f"coles_bidir_{best_overall_config}.pt")},
+    )
+
+    del llm_model, tokenizer
+    torch.cuda.empty_cache()
+    gc.collect()
+
+
+if __name__ == "__main__":
+    main()

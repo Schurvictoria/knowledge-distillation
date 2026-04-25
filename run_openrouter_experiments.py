@@ -351,18 +351,44 @@ def load_dataset(dataset_name):
         pos_label, neg_label = "young", "old"
         task_desc = "age group (0=youngest, 1, 2, 3=oldest)"
         answer_fmt = "0, 1, 2, or 3"
-        system_expert = ("You are an expert bank analyst specializing in customer demographics. "
-                        "You analyze spending patterns and transaction behavior to predict "
-                        "the age group of bank clients.")
+        system_expert = (
+            "You are an expert bank analyst predicting customer age group from transaction history.\n\n"
+            "Age-related transaction patterns to look for:\n"
+            "- Group 0 (young, under 25): many small transactions (often < 500 RUB), "
+            "high category diversity (10+ different categories), high frequency (20+ txns/month), "
+            "spending spread across entertainment, food delivery, and online services\n"
+            "- Group 1 (adult, 25-35): moderate frequency (10-20 txns/month), mix of small and "
+            "medium amounts, diverse but more structured spending across retail and dining\n"
+            "- Group 2 (middle-aged, 35-55): higher average amounts per transaction, "
+            "stable and concentrated spending in fewer categories (5-8), regular patterns, "
+            "often 8-15 txns/month\n"
+            "- Group 3 (senior, over 55): low transaction frequency (< 10/month), "
+            "concentrated in 2-4 habitual categories, higher per-transaction amounts, "
+            "very regular and repetitive spending patterns\n\n"
+            "Answer with one digit: 0, 1, 2, or 3."
+        )
 
         def serialize(cid):
             if cid not in grouped.groups: return "No transaction data available."
             ct = grouped.get_group(cid)
             n = len(ct)
             amt = np.abs(ct["amount_rur"].values)
+            cats = ct["small_group"].fillna(0).value_counts()
+            n_unique_cats = cats.nunique()
+            top_cats = ", ".join(
+                f"cat{int(c)} ({cnt} txns, {cnt * 100 // max(n, 1)}%)"
+                for c, cnt in cats.head(6).items()
+            )
+            days_span = int(ct["trans_date"].max() - ct["trans_date"].min()) if len(ct) > 1 else 0
+            months = max(1, days_span // 30)
+            micro_pct = int((amt < 500).sum() * 100 // max(n, 1))
+            large_pct = int((amt > 5000).sum() * 100 // max(n, 1))
             return (f"Client profile:\n"
-                    f"- Transactions: {n}\n"
-                    f"- Spending: avg {amt.mean():.0f} RUB, median {np.median(amt):.0f}")
+                    f"- Transactions: {n} over {months} months ({max(1, n // months)}/month)\n"
+                    f"- Spending: avg {amt.mean():.0f} RUB, median {np.median(amt):.0f}, max {amt.max():.0f}\n"
+                    f"- Transaction size: {micro_pct}% small (<500 RUB), {large_pct}% large (>5000 RUB)\n"
+                    f"- Category diversity: {n_unique_cats} unique categories\n"
+                    f"- Top categories: {top_cats}")
 
     # Build kNN context
     sc = MaxAbsScaler()
@@ -371,12 +397,28 @@ def load_dataset(dataset_name):
     dists, idxs = nn.kneighbors(sc.transform(coles_test))
 
     knn_ctx = {}
-    for i, cid in enumerate(cids_test):
-        nb_labels = y_train[idxs[i]]
-        pos_count = int(nb_labels.sum())
-        neg_count = 10 - pos_count
-        majority = pos_label if pos_count > 5 else neg_label
-        knn_ctx[cid] = {"pos": pos_count, "neg": neg_count, "majority": majority}
+    if dataset_name == "age":
+        _age_names = {0: "young", 1: "adult", 2: "middle-aged", 3: "senior"}
+        for i, cid in enumerate(cids_test):
+            nb_labels = y_train[idxs[i]].astype(int)
+            counts = np.bincount(nb_labels, minlength=4)
+            majority_cls = int(np.argmax(counts))
+            knn_ctx[cid] = {
+                "pos": int(counts[majority_cls]),
+                "neg": 10 - int(counts[majority_cls]),
+                "majority": _age_names[majority_cls],
+                "text": (f"Similar clients (10 neighbors): "
+                         f"young={counts[0]}, adult={counts[1]}, "
+                         f"middle-aged={counts[2]}, senior={counts[3]}. "
+                         f"Most common: {_age_names[majority_cls]} ({counts[majority_cls]}/10)."),
+            }
+    else:
+        for i, cid in enumerate(cids_test):
+            nb_labels = y_train[idxs[i]]
+            pos_count = int(nb_labels.sum())
+            neg_count = 10 - pos_count
+            majority = pos_label if pos_count > 5 else neg_label
+            knn_ctx[cid] = {"pos": pos_count, "neg": neg_count, "majority": majority}
 
     return {
         "cids_test": cids_test, "y_test": y_test,
@@ -517,9 +559,12 @@ def run_rq3_dir2(dataset_name, model_keys=None, api_key=None, full_matrix=False)
                                        f"Key factors: {s['factors']}.\n")
                     if enrichment in ["knn", "both"]:
                         k = data["knn_ctx"][cid]
-                        enrich_text += (f"\nSimilar clients: {k['pos']} {data['pos_label']}, "
-                                       f"{k['neg']} {data['neg_label']} "
-                                       f"(majority: {k['majority']}).\n")
+                        if "text" in k:
+                            enrich_text += f"\n{k['text']}\n"
+                        else:
+                            enrich_text += (f"\nSimilar clients: {k['pos']} {data['pos_label']}, "
+                                           f"{k['neg']} {data['neg_label']} "
+                                           f"(majority: {k['majority']}).\n")
                     answer_instruction = f"\n\nRespond with ONLY one word: {data['answer_fmt']}. Write your answer after 'ANSWER:'"
                     if strategy == "zero_shot":
                         user_msg = f"{profile}{enrich_text}{answer_instruction}"
@@ -664,10 +709,13 @@ def run_rq3_cot_effect(dataset_name, api_key=None):
                 cid = data["cids_test"][i]
                 profile = data["serialize"](int(cid))
                 k = data["knn_ctx"][cid]
+                if "text" in k:
+                    knn_part = k["text"]
+                else:
+                    knn_part = (f"Similar clients: {k['pos']} {data['pos_label']}, "
+                                f"{k['neg']} {data['neg_label']} (majority: {k['majority']}).")
                 user_msg = (f"Profile:\n{profile}\n\n"
-                           f"Similar clients: {k['pos']} {data['pos_label']}, "
-                           f"{k['neg']} {data['neg_label']} "
-                           f"(majority: {k['majority']}).\n\nPredict.")
+                           f"{knn_part}\n\nPredict.")
 
                 messages = [
                     {"role": "system", "content": system},
