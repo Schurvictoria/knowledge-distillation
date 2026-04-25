@@ -1,3 +1,13 @@
+"""
+Загрузчик Gender датасета (Sberbank, transactions-gender).
+
+Что делает: читает data/transactions.csv и data/gender_train.csv,
+кодирует mcc_code/tr_type, делает stratified train/test split (90/10, seed=42),
+возвращает GenderDataset с готовыми train/test записями для CoLES.
+
+Используется в: experiments/rq1_bidirectional/coles/run_gender_coles.py,
+experiments/rq1_bidirectional/latte/E1_2_gender_latte.py и т.д.
+"""
 from dataclasses import dataclass
 from pathlib import Path
 

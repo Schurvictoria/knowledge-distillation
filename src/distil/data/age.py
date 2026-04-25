@@ -1,3 +1,10 @@
+"""
+Загрузчик Age датасета (Sberbank, age-group-prediction).
+
+Что делает: читает data/transactions_train.csv + data/train_target.csv,
+кодирует small_group (категория транзакции), 4-class задача (bins).
+30K клиентов — самый большой из трёх датасетов.
+"""
 from dataclasses import dataclass
 from pathlib import Path
 

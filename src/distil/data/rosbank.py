@@ -1,3 +1,11 @@
+"""
+Загрузчик Rosbank датасета (churn prediction).
+
+Что делает: читает data/rosbank_train.csv (одна таблица — и транзакции и labels),
+парсит TRDATETIME, кодирует MCC + channel_type + currency + trx_category,
+stratified train/test split (90/10, seed=42).
+Бинарная задача: предсказать churn (target_flag).
+"""
 from dataclasses import dataclass
 from pathlib import Path
 

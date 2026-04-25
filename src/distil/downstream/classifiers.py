@@ -1,8 +1,17 @@
+"""
+Оценка качества embeddings через downstream классификаторы.
+
+Для каждой задачи (binary/multiclass) обучает 3 классификатора на CoLES embeddings:
+LightGBM, XGBoost, LogisticRegression. Возвращает метрики (roc_auc/accuracy/f1).
+
+Параметры LGBM/XGB совпадают с оригинальными dllllb/coles-paper scenarios.
+"""
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.preprocessing import MaxAbsScaler
 
 
+# LGBM hyperparameters для binary задач (Gender, Rosbank) — paper config
 _LGBM_BINARY_PARAMS = dict(
     n_estimators=500,
     learning_rate=0.02,

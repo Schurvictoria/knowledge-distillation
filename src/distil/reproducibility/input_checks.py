@@ -1,3 +1,14 @@
+"""
+Pre-flight проверки что все нужные входные файлы на месте.
+
+Зачем: если запустить LATTE без CoLES baseline, скрипт упадёт с FileNotFoundError
+посередине обучения, потеряв время. Эти require_*() функции бросают MissingPrerequisiteError
+сразу на старте с подсказкой "Run prerequisite: <script>".
+
+Пример: require_coles_embeddings("gender") проверит что
+embeddings/gender/{emb_train,emb_test,cids_train,cids_test,y_train,y_test}_seed42.npy
+все существуют.
+"""
 from pathlib import Path
 
 

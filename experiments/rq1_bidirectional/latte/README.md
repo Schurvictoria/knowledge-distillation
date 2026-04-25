@@ -10,8 +10,6 @@
 | `E1_2_rosbank_latte.py` | Rosbank (437 test) |
 | `E1_2_age_latte.py` | Age 4-class (3000 test) |
 
-`ablations/` — legacy variants (alpha=0.05 ablation, e5-large variant), **не для main paper**.
-
 ## Methodology (после фиксов)
 
 - `seed=42` + `pl.seed_everything` + `cudnn.deterministic=True` (полная воспроизводимость)

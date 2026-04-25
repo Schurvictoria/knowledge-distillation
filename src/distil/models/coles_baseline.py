@@ -1,9 +1,21 @@
+"""
+CoLES baseline — self-supervised contrastive learning of event sequences.
+
+Что делает: TrxEncoder (категории + amount) → RnnSeqEncoder (GRU/LSTM) →
+ContrastiveLoss + HardNegativePairSelector через ColesDataset со sample slices.
+После обучения: extract_embeddings() даёт hidden_size-мерный вектор на клиента.
+
+Конфиги для трёх датасетов вшиты в ColesDataset.for_dataset() — те же что в
+оригинальном dllllb/coles-paper. Менять не надо чтобы числа в REPORT.md совпадали.
+"""
 from dataclasses import dataclass
 from functools import partial
 
 import numpy as np
 
 
+# Размерности embedding-таблиц для каждого категориального признака
+# (взяты из оригинальных coles-paper scenarios)
 _GENDER_EMBEDDING_DIMENSIONS = {"mcc_code": 48, "tr_type": 24}
 _ROSBANK_EMBEDDING_DIMENSIONS = {"mcc_code": 24, "channel_type": 4, "currency": 4, "trx_category": 4}
 _AGE_EMBEDDING_DIMENSIONS = {"small_group": 16}

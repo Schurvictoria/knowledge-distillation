@@ -1,3 +1,12 @@
+"""
+Единая JSON-схема для результата эксперимента.
+
+Каждый эксперимент в конце пишет result.json с этой структурой.
+Потом scripts/aggregate_results.py читает все result.json и рендерит таблицы для REPORT.md.
+
+Validation в __post_init__: task_type должен быть из {binary,multiclass,regression},
+rq из {RQ1, RQ2-D1, RQ2-D2, RQ3}. Чтобы не было опечаток типа "RQ2_D1".
+"""
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any

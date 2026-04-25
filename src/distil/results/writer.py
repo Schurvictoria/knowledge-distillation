@@ -1,3 +1,10 @@
+"""
+save_experiment_result(...) — пишет result.json в стандартное место.
+
+Вызывается в конце каждого экспериментского скрипта.
+Автоматически добавляет git_commit, torch_version, ptls_version, timestamp_utc —
+чтобы потом по результату можно было точно сказать на каком коммите и стеке его получили.
+"""
 import json
 import subprocess
 from pathlib import Path

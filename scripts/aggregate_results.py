@@ -1,10 +1,18 @@
 """
-Crawl results/**/result.json and render summary tables grouped by RQ.
-Output: REPORT_GENERATED.md (separate from manual REPORT.md).
+Авто-генерация таблиц для REPORT.md из всех result.json файлов.
 
-Usage:
-    python scripts/aggregate_results.py
-    python scripts/aggregate_results.py --results-root results --output REPORT_GENERATED.md
+Что делает:
+  1. Идёт по results/**/result.json
+  2. Группирует по RQ → method → dataset
+  3. Если несколько сидов на одну ячейку — считает mean ± std
+  4. Рендерит REPORT_GENERATED.md с 4 таблицами (одна на RQ)
+
+Зачем: чтобы не заполнять REPORT.md руками после каждого re-run.
+
+Запуск:
+  python scripts/aggregate_results.py
+  # или
+  make aggregate
 """
 import argparse
 import json

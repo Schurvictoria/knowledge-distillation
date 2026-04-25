@@ -1,3 +1,9 @@
+"""
+Auto-download датасетов с HuggingFace pytorch-lifestream org.
+
+Вызывается из data/{gender,rosbank,age}.py если data/*.csv отсутствует.
+Скачивает .gz, разжимает в .csv. Если файл уже есть — пропускает.
+"""
 import subprocess
 from pathlib import Path
 
