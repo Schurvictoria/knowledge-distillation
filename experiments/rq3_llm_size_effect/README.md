@@ -26,14 +26,15 @@ rq3_llm_size_effect/
 
 ## Direction 1 (LLM → Structured) — E5.x
 
-LATTE с разными teacher LLMs.
+LATTE с разными teacher LLMs из **одного семейства Qwen2.5-Instruct** (clean scaling). Только Gender, single seed=42.
 
-| # | Teacher LLM | Size | Скрипт | Статус |
-|---|---|---|---|---|
-| **E5.1** | Gemma 3n E2B | 2B | — | dropped (gated на HF) |
-| **E5.2** | Qwen2.5-7B-Instruct | 7B | `../rq1_bidirectional/latte/E1_2_*.py` | ✓ done = E1.2 |
-| **E5.3** | Qwen2.5-3B (proxy) | 3B | `d1_teacher_size_for_latte/E5_x_extract_llm_embeddings.py --model Qwen/Qwen2.5-3B-Instruct --teacher qwen25_3b` затем LATTE retrain | pending |
-| **E5.4-E5.6** | Qwen3.6-35B / DeepSeek-R1 / GPT-4o | 35B+ | — | impossible локально |
+| # | Teacher LLM | Size | Variant | Скрипт | Статус |
+|---|---|---|---|---|---|
+| **E5.0** | Qwen2.5-0.5B-Instruct | 0.5B | Instruct | `d1_teacher_size_for_latte/E5_0_gender_latte_qwen0_5b.py` | pending |
+| **E5.1** | Qwen2.5-1.5B-Instruct | 1.5B | Instruct | `d1_teacher_size_for_latte/E5_1_gender_latte_qwen1_5b.py` | pending |
+| **E5.2** | Qwen2.5-3B (existing) | 3B | base | `../rq1_bidirectional/latte/E1_2_*_latte.py` | ✓ done = E1.2 (base teacher) |
+| **E5.2-Instruct** | Qwen2.5-3B-Instruct | 3B | Instruct | `d1_teacher_size_for_latte/E5_2_gender_latte_qwen3b_instruct.py` | pending |
+| **E5.3** | Qwen2.5-7B-Instruct | 7B | Instruct | `d1_teacher_size_for_latte/E5_3_gender_latte_qwen7b.py` | pending |
 
 ## Direction 2 (Structured → LLM, kNN CoT) — E6.x
 
@@ -45,7 +46,6 @@ LATTE с разными teacher LLMs.
 | **E6.2** | Qwen2.5-7B-Instruct | 7B local | `qwen_25_7b/E6_2_gender_qwen7b.py` | 0.498 | 0.762 | +26 pp |
 | **E6.3** | Qwen3.6-35B-A3B | 35B MoE | `qwen_36_35b/E6_3_gender_qwen36.py` | 0.5077 | 0.7790 | +27.1 pp |
 | **E6.4** | DeepSeek-V3.2-Speciale | 671B MoE | `deepseek_v32/E6_4_gender_deepseek.py` | 0.5152 | 0.7828 | +26.8 pp |
-| **E6.5** | GPT-4o | ~200B | — | dropped (closed) | — | — |
 
 **Главный finding:** kNN даёт **+25-29 pp AUC независимо от размера модели** (0.5 → 0.77-0.78). Размер LLM не bottleneck.
 

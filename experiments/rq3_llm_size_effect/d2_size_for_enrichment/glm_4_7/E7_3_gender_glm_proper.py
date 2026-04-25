@@ -33,6 +33,10 @@ _os.environ["PYTHONHASHSEED"] = str(_SEED)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# Diagnostic counter — prints first N raw API responses for reasoning_on calls
+_DIAG_PRINT_COUNT = 0
+_DIAG_PRINT_MAX = 5
+
 
 def call_glm_proper(messages, api_key, reasoning_on, pos_label, neg_label):
     """Call GLM-4.7 with proper CoT pipeline."""
@@ -85,6 +89,17 @@ def call_glm_proper(messages, api_key, reasoning_on, pos_label, neg_label):
             budget.add(usage.get("prompt_tokens", 500),
                       usage.get("completion_tokens", 20), "z-ai/glm-4.7")
             if not budget.check(): return 0.5
+
+            global _DIAG_PRINT_COUNT
+            if reasoning_on and _DIAG_PRINT_COUNT < _DIAG_PRINT_MAX:
+                _DIAG_PRINT_COUNT += 1
+                print(f"\n=== DIAG #{_DIAG_PRINT_COUNT} (reasoning_on=True, attempt={attempt}) ===", flush=True)
+                print(f"  finish_reason: {choice.get('finish_reason')}", flush=True)
+                print(f"  RAW content    ({len(content)} chars): {repr(content[:600])}", flush=True)
+                reasoning_field = msg.get("reasoning") or ""
+                print(f"  RAW reasoning  ({len(reasoning_field)} chars): {repr(reasoning_field[:600])}", flush=True)
+                print(f"  usage: prompt={usage.get('prompt_tokens')}, completion={usage.get('completion_tokens')}", flush=True)
+                print(f"=== END DIAG #{_DIAG_PRINT_COUNT} ===\n", flush=True)
 
             # Tier 1: JSON parse (primary)
             for source in [content, msg.get("reasoning", "") or ""]:

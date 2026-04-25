@@ -14,7 +14,6 @@
 | **E1.3** | LATTE + mutual KL (LLM ↔ CoLES) | `experiments/rq1_bidirectional/latte_mutual_kl/E1_3_{gender,age,all}_mutual_kl.py` |
 | **E1.4** | RAMD (Qwen2.5-7B teacher) | `experiments/rq1_bidirectional/ramd/E1_4_E1_5_ramd_step2.py` (local Qwen2.5-7B teacher) + `E1_4_gender_ramd_alt.py` (alternative) |
 | **E1.5** | RAMD (DeepSeek-V3.2 teacher) | Step 1: `experiments/rq1_bidirectional/ramd/E1_5_ramd_oof_step1_{binary,age_4class}.py --models deepseek_v3`<br>Step 2: `E1_4_E1_5_ramd_step2.py` с `RAMD_TEACHER=deepseek_v3` |
-| **E1.6** | RAMD (GPT-4o) — dropped | — |
 
 **Ablations:**
 - `experiments/rq1_bidirectional/latte/ablations/E1_2_gender_latte_alpha_ablation.py` — α sweep для E1.2 (обоснование best α=0.1)
@@ -55,10 +54,11 @@
 
 | # | Experiment | Script |
 |---|---|---|
-| **E5.1** | Gemma 3n E2B — dropped (gated HF) | — |
-| **E5.2** | Qwen2.5-7B — same as E1.2 | `experiments/rq1_bidirectional/latte/E1_2_*_latte.py` |
-| **E5.3** | Qwen2.5-3B proxy | `experiments/rq3_llm_size_effect/E5_x_extract_llm_embeddings.py --model Qwen/Qwen2.5-3B-Instruct --teacher qwen25_3b` затем LATTE с этим файлом embeddings |
-| **E5.4**–**E5.6** | Qwen3.6-35B / DeepSeek-R1 / GPT-4o — невозможно локально | — |
+| **E5.0** | Qwen2.5-0.5B-Instruct (Gender ladder) | `experiments/rq3_llm_size_effect/d1_teacher_size_for_latte/E5_0_gender_latte_qwen0_5b.py` *(pending)* |
+| **E5.1** | Qwen2.5-1.5B-Instruct (Gender ladder) | `experiments/rq3_llm_size_effect/d1_teacher_size_for_latte/E5_1_gender_latte_qwen1_5b.py` *(pending)* |
+| **E5.2** | Qwen2.5-3B-base (existing canonical, used in E1.2) | `experiments/rq1_bidirectional/latte/E1_2_*_latte.py` |
+| **E5.2-Instruct** | Qwen2.5-3B-Instruct (Gender ladder) | `experiments/rq3_llm_size_effect/d1_teacher_size_for_latte/E5_2_gender_latte_qwen3b_instruct.py` *(pending)* |
+| **E5.3** | Qwen2.5-7B-Instruct (Gender ladder, top of ladder) | `experiments/rq3_llm_size_effect/d1_teacher_size_for_latte/E5_3_gender_latte_qwen7b.py` *(pending)* |
 
 ## RQ3 Direction 2: LLM Size Effect on Prompt Enrichment
 
@@ -68,7 +68,6 @@
 | **E6.2** | Qwen2.5-7B (4-bit local) — same as E3.4 | см. RQ2 D2 |
 | **E6.3** | Qwen3.6-35B-A3B (OpenRouter) | `experiments/rq2_d2_prompt_enrichment/by_model/E6_3_qwen36_runner.py --datasets gender` |
 | **E6.4** | DeepSeek-V3.2-Speciale (OpenRouter) | `experiments/rq2_d2_prompt_enrichment/by_model/E6_4_deepseek_runner.py --datasets gender` |
-| **E6.5** | GPT-4o — dropped | — |
 
 **GLM-4.7 helpers (E3.x для GLM):**
 - `experiments/rq2_d2_prompt_enrichment/by_model/E3_x_glm_{fewshot_proper,fewshot_random,age_runner}.py`

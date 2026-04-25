@@ -104,7 +104,6 @@ MODELS = {
         "size": "671B MoE",
         "supports_thinking": True,
     },
-    # GPT-4o runs via OpenAI Batch API separately (cheaper)
 }
 
 MCC_GROUPS = {range(1,1500):"Agriculture",range(4000,4800):"Transportation",
