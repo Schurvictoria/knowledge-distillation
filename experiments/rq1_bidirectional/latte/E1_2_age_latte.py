@@ -34,6 +34,22 @@ os.environ["PYTHONHASHSEED"] = str(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
+
+# ---- File existence checks ----
+from pathlib import Path as _P
+_required = [
+    _P("data/transactions_train.csv"),
+    _P("embeddings/age/cids_train_seed42.npy"),
+    _P("embeddings/age/cids_test_seed42.npy"),
+    _P("results/age_llm4es/llm4es_embeddings.npz"),
+]
+for _p in _required:
+    assert _p.exists(), (
+        f"\n  Missing: {_p}"
+        f"\n  -> Run baseline:    python experiments/infrastructure/run_age_coles.py"
+        f"\n  -> Run LLM4ES gen:  python experiments/rq2_d1_teacher_signals/feature_based/E2_2_age_llm4es.py"
+    )
+
 OUTPUT_DIR = Path("results/age_true_latte")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path("data")
@@ -95,6 +111,8 @@ cids_emb_tr = np.load("embeddings/age/cids_train_seed42.npy")
 cids_emb_te = np.load("embeddings/age/cids_test_seed42.npy")
 llm_all = np.load("results/age_llm4es/llm4es_embeddings.npz")["embeddings"].astype(np.float32)
 all_cids_emb = np.concatenate([cids_emb_tr, cids_emb_te])
+assert len(llm_all) == len(all_cids_emb), \
+    f'LLM emb count ({len(llm_all)}) != cids count ({len(all_cids_emb)}) — bad alignment'
 cid_to_llm = {cid: llm_all[i] for i, cid in enumerate(all_cids_emb)}
 missing_tr = [c for c in cids_train_order if c not in cid_to_llm]
 missing_te = [c for c in cids_test_order if c not in cid_to_llm]
@@ -187,7 +205,7 @@ for alpha in [0.1]:
         seq_encoder.train(); proj_seq.train(); classifier.train()
         idx = torch.randperm(len(train_rec))
         for s in range(0, len(train_rec), 128):
-            b_idx = idx[s:s+32].tolist()
+            b_idx = idx[s:s+128].tolist()
             dl = inference_data_loader([train_rec[i] for i in b_idx], num_workers=0, batch_size=128)
             for batch in dl:
                 seq_emb = seq_encoder(batch.to(device))

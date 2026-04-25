@@ -40,6 +40,22 @@ os.environ["PYTHONHASHSEED"] = str(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
+
+# ---- File existence checks ----
+from pathlib import Path as _P
+_required = [
+    _P("data/transactions.csv"),
+    _P("embeddings/gender/cids_train_seed42.npy"),
+    _P("embeddings/gender/cids_test_seed42.npy"),
+    _P("results/gender_llm4es/llm4es_embeddings.npz"),
+]
+for _p in _required:
+    assert _p.exists(), (
+        f"\n  Missing: {_p}"
+        f"\n  -> Run baseline:    python experiments/infrastructure/run_gender_coles.py"
+        f"\n  -> Run LLM4ES gen:  python experiments/rq2_d1_teacher_signals/feature_based/E2_2_gender_llm4es.py"
+    )
+
 OUTPUT_DIR = Path("results/gender_true_latte")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path("data")
@@ -124,6 +140,8 @@ cids_emb_te = np.load("embeddings/gender/cids_test_seed42.npy")
 
 # Build cid -> llm_emb map
 all_cids_emb = np.concatenate([cids_emb, cids_emb_te])
+assert len(llm_all) == len(all_cids_emb), \
+    f'LLM emb count ({len(llm_all)}) != cids count ({len(all_cids_emb)}) — bad alignment'
 cid_to_llm = {cid: llm_all[i] for i, cid in enumerate(all_cids_emb)}
 
 # Align with train_rec/test_rec order (hard-assert: no silent zeros)
@@ -257,7 +275,7 @@ for alpha in [0.1]:
         n_batches = 0
 
         for start in range(0, len(train_rec), 128):
-            batch_idx = idx[start:start+32].tolist()
+            batch_idx = idx[start:start+128].tolist()
             batch_records = [train_rec[i] for i in batch_idx]
 
             dl = inference_data_loader(batch_records, num_workers=0, batch_size=128)

@@ -4,7 +4,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![PyTorch Lightning](https://img.shields.io/badge/Lightning-2.1-792EE5.svg?logo=lightning&logoColor=white)](https://lightning.ai/)
 [![pytorch-lifestream](https://img.shields.io/badge/pytorch--lifestream-0.7-4B8BBE.svg)](https://github.com/dllllb/pytorch-lifestream)
-[![Datasets on HF](https://img.shields.io/badge/%F0%9F%A4%97%20datasets-HuggingFace-FFD21E.svg)](https://huggingface.co/datasets/dllllb)
+[![Datasets on HF](https://img.shields.io/badge/%F0%9F%A4%97%20datasets-pytorch--lifestream-FFD21E.svg)](https://huggingface.co/pytorch-lifestream)
 
 This project explores knowledge transfer between LLMs (large language models) and specialized models for structured (transactional) data. LLMs can reason over serialized event logs and generate rich explanations, but are slow and costly at inference. Structured models are efficient and accurate, but lack interpretive depth.
 
