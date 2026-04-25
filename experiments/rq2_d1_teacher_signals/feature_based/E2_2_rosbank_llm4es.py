@@ -27,6 +27,19 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, PeftModel, TaskType
 from datasets import Dataset
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 OUTPUT_DIR = Path("results/rosbank_llm4es")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CKPT_DIR = OUTPUT_DIR / "checkpoints"
@@ -259,12 +272,12 @@ def taid_alpha(ep, mx, tgt, warm=0.2):
     return tgt * min(ep / w, 1.0) if w > 0 else tgt
 
 experiments = [
-    ("fixed_α0.5",      0.5, False, False),
-    ("taid_α0.5",        0.5, True,  False),
-    ("dakd_α0.5",        0.5, False, True),
-    ("taid_dakd_α0.5",   0.5, True,  True),
-    ("taid_dakd_α0.3",   0.3, True,  True),
-    ("taid_dakd_α0.7",   0.7, True,  True),
+    ("fixed_alpha0.5",      0.5, False, False),
+    ("taid_alpha0.5",        0.5, True,  False),
+    ("dakd_alpha0.5",        0.5, False, True),
+    ("taid_dakd_alpha0.5",   0.5, True,  True),
+    ("taid_dakd_alpha0.3",   0.3, True,  True),
+    ("taid_dakd_alpha0.7",   0.7, True,  True),
 ]
 
 for name, a_tgt, use_taid, use_dakd in experiments:

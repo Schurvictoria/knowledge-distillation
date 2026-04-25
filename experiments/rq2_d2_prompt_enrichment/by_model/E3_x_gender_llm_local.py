@@ -19,6 +19,18 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 from xgboost import XGBClassifier
 import shap
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
@@ -217,6 +229,7 @@ def compute_oof_shap(tx, target_map, customer_ids):
 def load_model():
     """Load Qwen2.5-7B-Instruct in 4-bit."""
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
 
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,

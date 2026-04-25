@@ -25,6 +25,19 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from run_openrouter_experiments import load_dataset
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}", flush=True)
 
@@ -69,12 +82,12 @@ def extract_one_dataset(model_id, teacher_short, dataset_name, use_4bit=True):
             if not text or text == "No txns.":
                 continue
             inp = tokenizer(text, return_tensors="pt", truncation=True, max_length=1024).to(model.device)
-            # Forward pass — get last hidden state
-            out = model(**inp, output_hidden_states=False)
-            # Mean-pool over seq length (masked)
-            last = out.last_hidden_state[0]  # [seq, hidden]
+            # Forward pass — match LLM4ES convention (E2_2): mean-pool over LAST 8 LAYERS,
+            # then masked mean over sequence length.
+            out = model(**inp, output_hidden_states=True)
+            hidden = torch.stack(out.hidden_states[-8:]).mean(0)[0]  # [seq, hidden]
             mask = inp["attention_mask"][0].float().unsqueeze(-1)
-            pooled = (last * mask).sum(0) / mask.sum(0).clamp(min=1)
+            pooled = (hidden * mask).sum(0) / mask.sum(0).clamp(min=1)
             embeddings[i] = pooled.float().cpu().numpy()
 
             if (i+1) % 500 == 0:

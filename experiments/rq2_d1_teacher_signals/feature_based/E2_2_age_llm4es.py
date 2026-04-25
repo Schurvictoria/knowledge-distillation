@@ -27,6 +27,19 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, PeftModel, TaskType
 from datasets import Dataset
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 OUTPUT_DIR = Path("results/age_llm4es")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CKPT_DIR = OUTPUT_DIR / "checkpoints"
@@ -259,8 +272,8 @@ for alpha in [0.3, 0.5]:
             best_acc = max(best_acc, acc)
             print(f"    ep {ep+1}: acc={acc:.4f} (best={best_acc:.4f})")
 
-    results[f"dml_α{alpha}"] = best_acc
-    torch.save(ma.state_dict(), OUTPUT_DIR / f"dml_coles_α{alpha}.pt")
+    results[f"dml_alpha{alpha}"] = best_acc
+    torch.save(ma.state_dict(), OUTPUT_DIR / f"dml_coles_alpha{alpha}.pt")
     del ma, mb; torch.cuda.empty_cache()
 
 # Summary

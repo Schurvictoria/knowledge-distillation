@@ -22,6 +22,18 @@ from ptls.frames.coles import CoLESModule, ColesDataset
 from ptls.frames.coles.split_strategy import SampleSlices
 from ptls.nn import TrxEncoder, RnnSeqEncoder
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
@@ -247,6 +259,7 @@ def evaluate_downstream(X_train, y_train, X_test, y_test, seed):
     }
 
     from xgboost import XGBClassifier
+
     xgb = XGBClassifier(
         n_estimators=300, max_depth=6, learning_rate=0.1,
         subsample=0.8, colsample_bytree=0.8, eval_metric="auc",

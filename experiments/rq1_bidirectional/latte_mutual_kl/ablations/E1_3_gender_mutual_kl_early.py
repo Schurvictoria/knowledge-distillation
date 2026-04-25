@@ -222,8 +222,8 @@ def run_alternating(alpha=0.5, n_rounds=5, epochs_per_round=50, lr=1e-3, bs=256)
         print(f"  Round {round_i+1}: CoLES MLP={mlp_a:.4f} LGBM={lgbm_a:.4f} | LLM MLP={mlp_b:.4f} LGBM={lgbm_b:.4f}")
 
     # Save checkpoints
-    torch.save(model_a.state_dict(), OUTPUT_DIR / f"alternating_coles_α{alpha}.pt")
-    torch.save(model_b.state_dict(), OUTPUT_DIR / f"alternating_llm_α{alpha}.pt")
+    torch.save(model_a.state_dict(), OUTPUT_DIR / f"alternating_coles_alpha{alpha}.pt")
+    torch.save(model_b.state_dict(), OUTPUT_DIR / f"alternating_llm_alpha{alpha}.pt")
     return model_a, model_b, history
 
 for alpha in [0.3, 0.5, 0.7]:
@@ -231,8 +231,8 @@ for alpha in [0.3, 0.5, 0.7]:
     _, _, hist = run_alternating(alpha=alpha)
     best_coles = max(h["coles_lgbm"] for h in hist)
     best_llm = max(h["llm_lgbm"] for h in hist)
-    results[f"alt_α{alpha}_coles"] = best_coles
-    results[f"alt_α{alpha}_llm"] = best_llm
+    results[f"alt_alpha{alpha}_coles"] = best_coles
+    results[f"alt_alpha{alpha}_llm"] = best_llm
 
 
 # ================================================================
@@ -287,15 +287,15 @@ def run_dml(alpha=0.5, epochs=200, lr=1e-3, bs=256):
                            "llm_mlp": mlp_b, "llm_lgbm": lgbm_b})
             print(f"  ep {ep+1}: CoLES MLP={mlp_a:.4f} LGBM={lgbm_a:.4f} | LLM MLP={mlp_b:.4f} LGBM={lgbm_b:.4f}")
 
-    torch.save(model_a.state_dict(), OUTPUT_DIR / f"dml_coles_α{alpha}.pt")
-    torch.save(model_b.state_dict(), OUTPUT_DIR / f"dml_llm_α{alpha}.pt")
+    torch.save(model_a.state_dict(), OUTPUT_DIR / f"dml_coles_alpha{alpha}.pt")
+    torch.save(model_b.state_dict(), OUTPUT_DIR / f"dml_llm_alpha{alpha}.pt")
     return best_coles_lgbm, best_llm_lgbm, history
 
 for alpha in [0.3, 0.5, 0.7]:
     print(f"\n--- α={alpha} ---")
     bc, bl, hist = run_dml(alpha=alpha)
-    results[f"dml_α{alpha}_coles"] = bc
-    results[f"dml_α{alpha}_llm"] = bl
+    results[f"dml_alpha{alpha}_coles"] = bc
+    results[f"dml_alpha{alpha}_llm"] = bl
 
 
 # ================================================================

@@ -27,6 +27,14 @@ from sklearn.preprocessing import MaxAbsScaler
 from lightgbm import LGBMClassifier
 import lightgbm as lgb
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+
+
+
 OUTPUT_DIR = Path("results/blite_soft_distill")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -125,13 +133,13 @@ def run_dataset(dataset_name):
             # 3. Soft labels (various alpha)
             for alpha in [0.1, 0.2, 0.3, 0.5]:
                 auc = soft_label_lgbm_binary(X_train, y_train, llm_train, X_test, y_test, alpha=alpha)
-                results[f"soft_{strat}_α{alpha}"] = auc
+                results[f"soft_{strat}_alpha{alpha}"] = auc
 
             print(f"  {strat}:")
             print(f"    hard_llm:   {results[f'hard_llm_{strat}']:.4f}")
             best_alpha = max((a for a in [0.1, 0.2, 0.3, 0.5]),
-                           key=lambda a: results.get(f"soft_{strat}_α{a}", 0))
-            print(f"    soft best:  {results[f'soft_{strat}_α{best_alpha}']:.4f} (α={best_alpha})")
+                           key=lambda a: results.get(f"soft_{strat}_alpha{a}", 0))
+            print(f"    soft best:  {results[f'soft_{strat}_alpha{best_alpha}']:.4f} (α={best_alpha})")
 
     # kNN CoT predictions (if available)
     if dataset_name in ["gender", "rosbank"]:
@@ -166,11 +174,11 @@ def run_dataset(dataset_name):
                                        reg_lambda=1, min_child_samples=50, verbose=-1)
             model.fit(X_tr_aug, y_soft)
             p = np.clip(model.predict(X_te_aug), 0, 1)
-            results[f"concat+soft_{strat}_α{alpha}"] = roc_auc_score(y_test, p)
+            results[f"concat+soft_{strat}_alpha{alpha}"] = roc_auc_score(y_test, p)
 
         best_cs = max((a for a in [0.2, 0.3]),
-                     key=lambda a: results.get(f"concat+soft_{strat}_α{a}", 0))
-        print(f"    concat+soft: {results[f'concat+soft_{strat}_α{best_cs}']:.4f} (α={best_cs})")
+                     key=lambda a: results.get(f"concat+soft_{strat}_alpha{a}", 0))
+        print(f"    concat+soft: {results[f'concat+soft_{strat}_alpha{best_cs}']:.4f} (α={best_cs})")
 
     # Summary
     print(f"\n  {dataset_name.upper()} SUMMARY:")

@@ -232,10 +232,10 @@ for alpha in [0.1]:
             if val_acc > best_val:
                 best_val = val_acc
                 best_test = test_acc
-                torch.save(seq_encoder.state_dict(), OUTPUT_DIR / f"coles_finetuned_α{alpha}.pt")
+                torch.save(seq_encoder.state_dict(), OUTPUT_DIR / f"coles_finetuned_alpha{alpha}.pt")
             print(f"  ep {ep+1}: val={val_acc:.4f} test={test_acc:.4f} best_val={best_val:.4f} best_test={best_test:.4f}")
 
-    results[f"finetune_α{alpha}"] = best_test
+    results[f"finetune_alpha{alpha}"] = best_test
     torch.cuda.empty_cache(); gc.collect()
 
 print("\n" + "=" * 60)

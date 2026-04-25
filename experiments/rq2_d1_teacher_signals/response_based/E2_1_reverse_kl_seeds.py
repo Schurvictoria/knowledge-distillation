@@ -36,6 +36,19 @@ from lightgbm import LGBMClassifier
 from ptls.data_load.datasets import inference_data_loader
 from ptls.nn import TrxEncoder, RnnSeqEncoder
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 SEEDS = [42, 123, 456, 789, 1024]
 OUT = Path("results/reverse_kl")
 OUT.mkdir(parents=True, exist_ok=True)

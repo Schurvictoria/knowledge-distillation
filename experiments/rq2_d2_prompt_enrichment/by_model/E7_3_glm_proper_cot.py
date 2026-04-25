@@ -23,6 +23,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 from run_openrouter_experiments import load_dataset, MODELS, budget, OUT
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+
+
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 

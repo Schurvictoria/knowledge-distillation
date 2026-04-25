@@ -167,6 +167,19 @@ def serialize_client(cid, max_txns=30):
 print("\nLoading LLM...")
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)

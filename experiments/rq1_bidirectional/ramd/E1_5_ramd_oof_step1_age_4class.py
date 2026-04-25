@@ -18,6 +18,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 from run_openrouter_experiments import MODELS, budget
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OUT_OOF = Path("results/ramd_openrouter")
 OUT_OOF.mkdir(parents=True, exist_ok=True)
@@ -191,3 +198,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"\n  FAILED {mk}: {e}", flush=True)
             import traceback; traceback.print_exc()
+

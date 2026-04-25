@@ -20,6 +20,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 from run_openrouter_experiments import load_dataset, budget, OUT
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL_ID = "qwen/qwen-2.5-7b-instruct"
 
@@ -127,6 +134,7 @@ def run_dataset(dataset_name, api_key):
 
     # Build XGBoost predictions on test (from agg features)
     import pandas as pd
+
     DATA = Path("data")
     if dataset_name == "gender":
         tx = pd.read_csv(DATA / "transactions.csv")

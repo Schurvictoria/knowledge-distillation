@@ -35,6 +35,19 @@ from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import LabelEncoder, MaxAbsScaler, StandardScaler
 from lightgbm import LGBMClassifier
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 # ptls not needed — using pre-computed embeddings
 
 OUTPUT_DIR = Path("results/gender_latte_distill")
@@ -311,7 +324,7 @@ for variant, text_tr, text_te in [
     ("shap", text_shap_train, text_shap_test),
 ]:
     for alpha in [0.1, 0.3, 0.5, 0.7]:
-        key = f"{variant}_adapter_α{alpha}"
+        key = f"{variant}_adapter_alpha{alpha}"
         auc, _ = train_contrastive_adapter(
             emb_train_baseline, text_tr, y_train,
             emb_test_baseline, text_te, y_test,

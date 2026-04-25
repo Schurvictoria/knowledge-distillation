@@ -40,6 +40,18 @@ from lightgbm import LGBMClassifier
 from ptls.data_load.datasets import inference_data_loader
 from ptls.nn import TrxEncoder, RnnSeqEncoder
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 SEEDS = [42, 123, 456, 789, 1024]
 OUT = Path("results/combined_kd")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -291,6 +303,7 @@ def run_dataset(name, alpha=0.1, beta=0.05, n_epochs=15):
     teacher_pred_t = torch.FloatTensor(teacher_aligned).to(device)
 
     from sklearn.metrics import roc_auc_score as auc_fn
+
     teacher_auc = auc_fn(y_tr, teacher_aligned)
     print(f"  LLM4ES emb dim={llm_emb_t.shape[1]}, kNN-CoT teacher OOF AUC={teacher_auc:.4f}", flush=True)
 

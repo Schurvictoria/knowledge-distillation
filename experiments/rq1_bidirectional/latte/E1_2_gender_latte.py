@@ -319,11 +319,11 @@ for alpha in [0.1]:
                 best_val = val_auc
                 best_test = test_auc  # honest: test corresponding to best-val epoch
                 best_epoch = epoch + 1
-                torch.save(seq_encoder.state_dict(), OUTPUT_DIR / f"coles_finetuned_α{alpha}.pt")
+                torch.save(seq_encoder.state_dict(), OUTPUT_DIR / f"coles_finetuned_alpha{alpha}.pt")
             print(f"  ep {epoch+1}: loss={total_loss/n_batches:.4f}, "
                   f"val={val_auc:.4f} test={test_auc:.4f} best_val={best_val:.4f} best_test={best_test:.4f}")
 
-    results[f"finetune_α{alpha}"] = best_test
+    results[f"finetune_alpha{alpha}"] = best_test
     print(f"  Best: val={best_val:.4f} test={best_test:.4f} at epoch {best_epoch}")
 
     torch.cuda.empty_cache(); gc.collect()

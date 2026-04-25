@@ -222,6 +222,19 @@ print("=" * 60)
 # True LATTE (unidirectional) first
 from functools import partial
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 def build_encoder():
     trx = TrxEncoder(embeddings={"small_group":{"in": len(sg_enc.classes_)+2, "out":16}},
                       numeric_values={"amount":"identity"}, embeddings_noise=0.003, use_batch_norm_with_lens=True)
@@ -302,10 +315,10 @@ for alpha in [0.05, 0.1]:
             acc = eval_coles()
             if acc > best:
                 best = acc
-                torch.save(seq_encoder.state_dict(), OUTPUT_DIR / f"coles_latte_v2_α{alpha}.pt")
+                torch.save(seq_encoder.state_dict(), OUTPUT_DIR / f"coles_latte_v2_alpha{alpha}.pt")
             print(f"    ep {ep+1}: acc={acc:.4f} (best={best:.4f})")
 
-    results[f"latte_v2_α{alpha}"] = best
+    results[f"latte_v2_alpha{alpha}"] = best
 
 # Summary
 print("\n" + "=" * 60)

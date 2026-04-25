@@ -14,6 +14,13 @@ from sklearn.model_selection import StratifiedKFold
 from xgboost import XGBClassifier
 
 import sys
+
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
@@ -64,6 +71,7 @@ def call_qwen25(messages, api_key, seed=42):
             if resp.status_code == 402:
                 print(f"    [402 CREDITS EXHAUSTED] Halting.", flush=True)
                 import os; os._exit(2)
+
             if resp.status_code != 200:
                 if attempt == 2: return -1
                 time.sleep(2); continue

@@ -23,6 +23,19 @@ from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 from lightgbm import LGBMClassifier
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
+
 OUTPUT_DIR = Path("results/gender_rkd")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -222,14 +235,14 @@ for alpha in [0.01, 0.05, 0.1, 0.3]:
     def loss_rkd_d(model, c, l, y, bce, a=alpha):
         ad, logits, z = model(c)
         return (1 - a) * bce(logits, y) + a * rkd_distance(ad, l)
-    results[f"rkd_d_α{alpha}"] = train_with_loss(f"rkd_d_α{alpha}", loss_rkd_d)
+    results[f"rkd_d_alpha{alpha}"] = train_with_loss(f"rkd_d_alpha{alpha}", loss_rkd_d)
 
 # 2. RKD-D + RKD-A
 for alpha in [0.01, 0.05, 0.1]:
     def loss_rkd_da(model, c, l, y, bce, a=alpha):
         ad, logits, z = model(c)
         return (1 - a) * bce(logits, y) + a * 0.5 * (rkd_distance(ad, l) + rkd_angle(ad, l))
-    results[f"rkd_da_α{alpha}"] = train_with_loss(f"rkd_da_α{alpha}", loss_rkd_da)
+    results[f"rkd_da_alpha{alpha}"] = train_with_loss(f"rkd_da_alpha{alpha}", loss_rkd_da)
 
 # 3. CRD with memory bank
 for alpha in [0.01, 0.05, 0.1]:
@@ -238,7 +251,7 @@ for alpha in [0.01, 0.05, 0.1]:
         # Project teacher to same space
         z_t = F.normalize(proj_t(l), dim=1)
         return (1 - a) * bce(logits, y) + a * crd_loss(z, z_t, mem_bank)
-    results[f"crd_α{alpha}"] = train_with_loss(f"crd_α{alpha}", loss_crd)
+    results[f"crd_alpha{alpha}"] = train_with_loss(f"crd_alpha{alpha}", loss_crd)
 
 # 4. LATTE with orthogonal decomposition
 for alpha in [0.05, 0.1, 0.3]:
@@ -249,7 +262,7 @@ for alpha in [0.05, 0.1, 0.3]:
         l_contrast = infonce(z_shared, z_text)
         l_ortho = ortho_loss(z_shared, z_spec)
         return (1 - a) * l_cls + a * l_contrast + lo * l_ortho
-    results[f"ortho_α{alpha}"] = train_with_loss(f"ortho_α{alpha}", loss_ortho, model_cls=OrthoAdapter)
+    results[f"ortho_alpha{alpha}"] = train_with_loss(f"ortho_alpha{alpha}", loss_ortho, model_cls=OrthoAdapter)
 
 # ---- Summary ----
 print("\n" + "=" * 60)

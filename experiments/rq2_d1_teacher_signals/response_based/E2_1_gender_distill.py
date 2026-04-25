@@ -23,6 +23,18 @@ from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 from sklearn.model_selection import train_test_split
 from lightgbm import LGBMClassifier
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 OUTPUT_DIR = Path("results/gender_distillation")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -186,6 +198,7 @@ print("="*60)
 # Extract LLM hidden states
 def extract_llm_embeddings():
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
 
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4",

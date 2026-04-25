@@ -26,10 +26,10 @@
 ## Пример запуска
 
 ```bash
-cd /workspace/repos/knowledge-distillation
+cd <repo-root>
 
 # DeepSeek Gender с seed=42
-python experiments/rq2_d2_prompt_enrichment/by_model/run_deepseek_proper.py \
+python experiments/rq2_d2_prompt_enrichment/by_model/E6_4_deepseek_runner.py \
     --datasets gender --budget 5.0
 
 # Qwen3.6 Rosbank

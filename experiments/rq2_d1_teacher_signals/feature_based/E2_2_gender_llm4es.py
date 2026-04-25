@@ -30,6 +30,18 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, TaskType
 from datasets import Dataset
 
+# ---- Reproducibility (seed=42) ----
+import random as _random, os as _os
+_SEED = 42
+_random.seed(_SEED); np.random.seed(_SEED)
+torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
+import pytorch_lightning as _pl
+_pl.seed_everything(_SEED, workers=True)
+_os.environ["PYTHONHASHSEED"] = str(_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+
 OUTPUT_DIR = Path("results/gender_llm4es")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CKPT_DIR = OUTPUT_DIR / "checkpoints"
@@ -210,6 +222,7 @@ if not SKIP_FINETUNE:
 else:
     # Load LoRA weights
     from peft import PeftModel
+
     model = PeftModel.from_pretrained(model, str(LORA_CKPT))
     print(f"  LoRA weights loaded from {LORA_CKPT}")
 
@@ -374,7 +387,7 @@ for alpha in [0.1, 0.3, 0.5]:
         if (epoch+1) % 50 == 0:
             print(f"    α={alpha} epoch {epoch+1}: AUC={auc:.4f} (best={best_auc:.4f})")
 
-    results[f"llm4es_adapter_α{alpha}"] = best_auc
+    results[f"llm4es_adapter_alpha{alpha}"] = best_auc
     del adapter; torch.cuda.empty_cache()
 
 # ---- Summary ----
