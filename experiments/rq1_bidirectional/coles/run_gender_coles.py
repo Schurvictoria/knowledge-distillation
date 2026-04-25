@@ -1,319 +1,158 @@
-#!/usr/bin/env python3
-
-# CoLES Gender
-
-import subprocess, sys, time, json, warnings, gc
+"""E1.1 — CoLES baseline on Gender dataset."""
+import json
+import time
+import warnings
 from pathlib import Path
-from functools import partial
 
-warnings.filterwarnings("ignore")
-
+import gc
 import numpy as np
 import pandas as pd
 import torch
-import pytorch_lightning as pl
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score
-from sklearn.preprocessing import LabelEncoder, MaxAbsScaler
-from sklearn.linear_model import LogisticRegression
 
-from ptls.data_load.datasets import MemoryMapDataset, inference_data_loader
-from ptls.frames.coles import CoLESModule, ColesDataset
-from ptls.frames.coles.split_strategy import SampleSlices
-from ptls.nn import TrxEncoder, RnnSeqEncoder
+warnings.filterwarnings("ignore")
 
-# ---- Reproducibility (seed=42) ----
-import random as _random, os as _os
-_SEED = 42
-_random.seed(_SEED); np.random.seed(_SEED)
-torch.manual_seed(_SEED); torch.cuda.manual_seed_all(_SEED)
-import pytorch_lightning as _pl
-_pl.seed_everything(_SEED, workers=True)
-_os.environ["PYTHONHASHSEED"] = str(_SEED)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+from distil.data import load_gender_dataset, save_coles_embeddings
+from distil.downstream import evaluate_all_classifiers
+from distil.models import (
+    ColesConfig,
+    build_coles_encoder,
+    train_coles_baseline,
+    extract_embeddings,
+)
+from distil.reproducibility import seed_everything
+from distil.results import save_experiment_result
 
-# ---- Required input files ----
-from pathlib import Path as _P
-_required_inputs = [
-    ("data/gender_train.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
-    ("data/transactions.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
-]
-for _p, _hint in _required_inputs:
-    assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
-# ---- end input check ----
-
-
-print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
 
 SEEDS = [42]
+DATASET_NAME = "gender"
+EXPERIMENT_BASE_ID = "E1_1_gender"
 
-GENDER_CFG = {
-    "hidden_size": 1024,
-    "rnn_type": "gru",
-    "batch_size": 128,
-    "lr": 0.002,
-    "n_epochs": 150,
-    "split_count": 5,
-    "cnt_min": 15,
-    "cnt_max": 75,
-    "embeddings_noise": 0.003,
-    "lr_step_size": 10,
-    "lr_gamma": 0.9025,
-}
-
-EMB_DIMS = {"mcc_code": 48, "tr_type": 24}
-
-LGBM_PARAMS = {
-    "n_estimators": 500,
-    "learning_rate": 0.02,
-    "boosting_type": "gbdt",
-    "max_depth": 6,
-    "subsample": 0.5,
-    "subsample_freq": 1,
-    "colsample_bytree": 0.75,
-    "reg_alpha": 1.0,
-    "reg_lambda": 1.0,
-    "min_child_samples": 50,
-    "verbosity": -1,
-}
-
-OUTPUT_DIR = Path("results/gender_coles")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-EMB_DIR = Path("embeddings/gender")
-EMB_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIRECTORY = Path("results/gender_coles")
+OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 
-def download(url, path):
-    if path.exists():
-        return
-    print(f"  downloading {path.name}...")
-    subprocess.run(["curl", "-sL", url, "-o", str(path)], check=True)
+def main() -> None:
+    print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
 
+    coles_config = ColesConfig.for_dataset(DATASET_NAME)
+    print(f"GENDER CoLES: {coles_config.rnn_type.upper()}-{coles_config.hidden_size}, "
+          f"lr={coles_config.learning_rate}, epochs={coles_config.num_epochs}, seeds={SEEDS}")
 
-def download_gender():
-    base = "https://huggingface.co/datasets/dllllb/transactions-gender/resolve/main"
-    gz = DATA_DIR / "transactions.csv.gz"
-    csv = DATA_DIR / "transactions.csv"
-    if not csv.exists():
-        download(f"{base}/transactions.csv.gz?download=true", gz)
-        subprocess.run(["gunzip", str(gz)], check=True)
-    download(f"{base}/gender_train.csv?download=true", DATA_DIR / "gender_train.csv")
+    all_per_seed_metrics = []
+    overall_start_time = time.time()
 
+    for seed in SEEDS:
+        print(f"\n--- seed={seed} ---")
+        per_seed_start_time = time.time()
+        seed_everything(seed)
 
-def parse_tr_datetime(s):
-    """Parse "day_offset HH:MM:SS" -> float days."""
-    parts = str(s).split(" ", 1)
-    day = int(parts[0])
-    if len(parts) > 1:
-        t = parts[1].split(":")
-        frac = (int(t[0]) * 3600 + int(t[1]) * 60 + int(t[2])) / 86400.0
-    else:
-        frac = 0.0
-    return day + frac
+        dataset = load_gender_dataset(seed=seed)
+        print(f"  train={len(dataset.train_records)}, test={len(dataset.test_records)}, "
+              f"features={dataset.feature_dimensions}")
 
+        encoder = build_coles_encoder(dataset.feature_dimensions, coles_config)
+        coles_module, trainer = train_coles_baseline(encoder, dataset.train_records, coles_config)
 
-def load_gender(seed):
-    download_gender()
-    tx = pd.read_csv(DATA_DIR / "transactions.csv")
-    labels = pd.read_csv(DATA_DIR / "gender_train.csv")
+        torch.cuda.empty_cache()
+        train_embeddings = extract_embeddings(coles_module, trainer, dataset.train_records)
+        test_embeddings = extract_embeddings(coles_module, trainer, dataset.test_records)
+        print(f"  embeddings: {train_embeddings.shape}")
 
-    tx = tx[tx["customer_id"].isin(labels["customer_id"])].copy()
+        train_customer_ids = np.array([record["customer_id"] for record in dataset.train_records])
+        test_customer_ids = np.array([record["customer_id"] for record in dataset.test_records])
 
-    tx["day_float"] = tx["tr_datetime"].apply(parse_tr_datetime)
-    tx = tx.sort_values(["customer_id", "day_float"])
+        embedding_directory = save_coles_embeddings(
+            dataset_name=DATASET_NAME,
+            seed=seed,
+            train_embeddings=train_embeddings,
+            test_embeddings=test_embeddings,
+            train_targets=dataset.train_targets,
+            test_targets=dataset.test_targets,
+            train_customer_ids=train_customer_ids,
+            test_customer_ids=test_customer_ids,
+        )
+        if seed == SEEDS[0]:
+            print(f"  saved embeddings to {embedding_directory}")
 
-    tx["amount"] = np.sign(tx["amount"]) * np.log1p(np.abs(tx["amount"]))
+        downstream_metrics = evaluate_all_classifiers(
+            train_embeddings=train_embeddings,
+            train_targets=dataset.train_targets,
+            test_embeddings=test_embeddings,
+            test_targets=dataset.test_targets,
+            task_type="binary",
+            seed=seed,
+        )
+        for classifier_name, metric_dict in downstream_metrics.items():
+            roc_auc = metric_dict["roc_auc"]
+            all_per_seed_metrics.append({"seed": seed, "model": classifier_name, "roc_auc": roc_auc})
+            print(f"  {classifier_name:<8} AUC={roc_auc:.4f}")
 
-    target_map = dict(zip(labels["customer_id"], labels["gender"]))
+        del coles_module, trainer
+        torch.cuda.empty_cache()
+        gc.collect()
+        print(f"  time: {time.time() - per_seed_start_time:.0f}s")
 
-    encoders = {}
-    for col in ["mcc_code", "tr_type"]:
-        tx[col] = tx[col].fillna("UNK").astype(str)
-        encoders[col] = LabelEncoder().fit(tx[col])
+    elapsed_total = time.time() - overall_start_time
 
-    ids = labels["customer_id"].values
-    targets = np.array([target_map[c] for c in ids])
-    idx_tr, idx_te = train_test_split(
-        np.arange(len(ids)), test_size=0.1, random_state=seed, stratify=targets)
+    metrics_dataframe = pd.DataFrame(all_per_seed_metrics)
+    metrics_dataframe.to_csv(OUTPUT_DIRECTORY / "gender_coles_per_seed.csv", index=False)
 
-    train_ids, test_ids = set(ids[idx_tr]), set(ids[idx_te])
+    print(f"\nGENDER RESULTS ({len(SEEDS)} seed(s))")
+    for classifier_name in ["lgbm", "logreg", "xgboost"]:
+        subset = metrics_dataframe[metrics_dataframe["model"] == classifier_name]
+        print(f"  {classifier_name:<8} AUC = {subset['roc_auc'].mean():.4f} ± {subset['roc_auc'].std():.4f}")
+    print(f"\nLiterature CoLES Gender: 0.890")
+    print(f"Total time: {elapsed_total:.0f}s ({elapsed_total/3600:.1f}h)")
 
-    def build_records(cid_set):
-        records = []
-        grouped = tx.groupby("customer_id")
-        for cid in cid_set:
-            if cid not in target_map or cid not in grouped.groups:
-                continue
-            ct = grouped.get_group(cid)
-            if len(ct) < 25:
-                continue
-            days = ct["day_float"].values
-            days = (days - days[0]).astype(np.float32)
-            rec = {
-                "customer_id": cid,
-                "target": target_map[cid],
-                "event_time": torch.FloatTensor(days),
-                "amount": torch.FloatTensor(ct["amount"].values),
-            }
-            for col, enc in encoders.items():
-                rec[col] = torch.LongTensor(enc.transform(ct[col].values) + 1)
-            records.append(rec)
-        return records
+    summary_path = OUTPUT_DIRECTORY / "gender_summary.json"
+    with summary_path.open("w") as file_handle:
+        json.dump(
+            {
+                "experiment": "CoLES Gender (paper config)",
+                "config": {
+                    "hidden_size": coles_config.hidden_size,
+                    "rnn_type": coles_config.rnn_type,
+                    "batch_size": coles_config.batch_size,
+                    "learning_rate": coles_config.learning_rate,
+                    "n_epochs": coles_config.num_epochs,
+                    "split_count": coles_config.split_count,
+                    "cnt_min": coles_config.minimum_sequence_length,
+                    "cnt_max": coles_config.maximum_sequence_length,
+                    "embeddings_noise": coles_config.embeddings_noise,
+                    "lr_step_size": coles_config.lr_step_size,
+                    "lr_gamma": coles_config.lr_gamma,
+                },
+                "emb_dims": coles_config.embedding_dimensions,
+                "seeds": SEEDS,
+                "time": elapsed_total,
+                "date": time.strftime("%Y-%m-%d %H:%M"),
+            },
+            file_handle,
+            indent=2,
+        )
 
-    train_rec = build_records(train_ids)
-    test_rec = build_records(test_ids)
-    feature_dims = {col: len(enc.classes_) + 2 for col, enc in encoders.items()}
-    return train_rec, test_rec, feature_dims
-
-
-def build_coles(feature_dims):
-    cfg = GENDER_CFG
-    embeddings = {col: {"in": feature_dims[col], "out": EMB_DIMS[col]} for col in feature_dims}
-    trx_encoder = TrxEncoder(
-        embeddings=embeddings,
-        numeric_values={"amount": "identity"},
-        embeddings_noise=cfg["embeddings_noise"],
-        use_batch_norm_with_lens=True,
+    canonical_metrics = metrics_dataframe[metrics_dataframe["model"] == "lgbm"]["roc_auc"].mean()
+    save_experiment_result(
+        experiment_id=EXPERIMENT_BASE_ID,
+        rq="RQ1",
+        method="CoLES baseline",
+        dataset=DATASET_NAME,
+        task_type="binary",
+        metrics={"roc_auc": float(canonical_metrics)},
+        config={
+            "hidden_size": coles_config.hidden_size,
+            "rnn_type": coles_config.rnn_type,
+            "batch_size": coles_config.batch_size,
+            "learning_rate": coles_config.learning_rate,
+            "epochs": coles_config.num_epochs,
+        },
+        seed=SEEDS[0],
+        runtime_seconds=elapsed_total,
+        artifacts={"embeddings_directory": str(embedding_directory)},
     )
-    seq_encoder = RnnSeqEncoder(
-        trx_encoder=trx_encoder, hidden_size=cfg["hidden_size"],
-        type=cfg["rnn_type"], bidir=False, trainable_starter="static",
-    )
-    module = CoLESModule(
-        seq_encoder=seq_encoder,
-        optimizer_partial=partial(torch.optim.Adam, lr=cfg["lr"]),
-        lr_scheduler_partial=partial(
-            torch.optim.lr_scheduler.StepLR,
-            step_size=cfg["lr_step_size"], gamma=cfg["lr_gamma"]),
-    )
-    splitter = SampleSlices(
-        split_count=cfg["split_count"],
-        cnt_min=cfg["cnt_min"], cnt_max=cfg["cnt_max"],
-    )
-    return module, splitter
 
 
-def train_coles(module, records, splitter):
-    dataset = ColesDataset(MemoryMapDataset(records), splitter=splitter)
-    loader = torch.utils.data.DataLoader(
-        dataset, batch_size=GENDER_CFG["batch_size"],
-        shuffle=True, num_workers=0, collate_fn=dataset.collate_fn,
-    )
-    trainer = pl.Trainer(
-        max_epochs=GENDER_CFG["n_epochs"],
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=1, enable_progress_bar=True,
-        enable_checkpointing=False, logger=False,
-    )
-    trainer.fit(module, loader)
-    module._trainer = trainer
-    return module
-
-
-def extract_embeddings(module, records):
-    dl = inference_data_loader(records, num_workers=0, batch_size=64)
-    chunks = module._trainer.predict(module, dl)
-    return torch.vstack(chunks).cpu().numpy()
-
-
-def evaluate_downstream(emb_train, y_train, emb_test, y_test, seed):
-    scaler = MaxAbsScaler()
-    Xtr = scaler.fit_transform(emb_train)
-    Xte = scaler.transform(emb_test)
-    results = {}
-
-    from lightgbm import LGBMClassifier
-    lgbm = LGBMClassifier(**LGBM_PARAMS, random_state=seed)
-    lgbm.fit(Xtr, y_train)
-    p = lgbm.predict_proba(Xte)[:, 1]
-    results["lgbm"] = roc_auc_score(y_test, p)
-
-    lr = LogisticRegression(max_iter=1000, random_state=seed)
-    lr.fit(Xtr, y_train)
-    p = lr.predict_proba(Xte)[:, 1]
-    results["logreg"] = roc_auc_score(y_test, p)
-
-    from xgboost import XGBClassifier
-
-    xgb = XGBClassifier(
-        n_estimators=300, max_depth=6, learning_rate=0.1,
-        subsample=0.8, colsample_bytree=0.8, eval_metric="auc",
-        random_state=seed, verbosity=0)
-    xgb.fit(Xtr, y_train)
-    p = xgb.predict_proba(Xte)[:, 1]
-    results["xgboost"] = roc_auc_score(y_test, p)
-    return results
-
-
-print("GENDER CoLES (paper config)")
-print(f"  GRU-{GENDER_CFG['hidden_size']}, lr={GENDER_CFG['lr']}, epochs={GENDER_CFG['n_epochs']}")
-print(f"  Seeds: {SEEDS}")
-
-all_results = []
-t0 = time.time()
-
-for seed in SEEDS:
-    print(f"\n--- seed={seed} ---")
-    ts = time.time()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    train_rec, test_rec, feature_dims = load_gender(seed)
-    y_train = np.array([r["target"] for r in train_rec])
-    y_test = np.array([r["target"] for r in test_rec])
-    print(f"  train={len(train_rec)}, test={len(test_rec)}, features={feature_dims}")
-
-    module, splitter = build_coles(feature_dims)
-    module = train_coles(module, train_rec, splitter)
-
-    torch.cuda.empty_cache()
-    emb_train = extract_embeddings(module, train_rec)
-    emb_test = extract_embeddings(module, test_rec)
-    print(f"  embeddings: {emb_train.shape}")
-
-    # Save embeddings
-    np.save(EMB_DIR / f"emb_train_seed{seed}.npy", emb_train)
-    np.save(EMB_DIR / f"emb_test_seed{seed}.npy", emb_test)
-    np.save(EMB_DIR / f"y_train_seed{seed}.npy", y_train)
-    np.save(EMB_DIR / f"y_test_seed{seed}.npy", y_test)
-    cids_train = [r["customer_id"] for r in train_rec]
-    cids_test = [r["customer_id"] for r in test_rec]
-    np.save(EMB_DIR / f"cids_train_seed{seed}.npy", np.array(cids_train))
-    np.save(EMB_DIR / f"cids_test_seed{seed}.npy", np.array(cids_test))
-    if seed == SEEDS[0]:
-        print(f"  saved embeddings to {EMB_DIR}")
-
-    downstream = evaluate_downstream(emb_train, y_train, emb_test, y_test, seed)
-    for model_name, auc in downstream.items():
-        all_results.append({"seed": seed, "model": model_name, "roc_auc": auc})
-        print(f"  {model_name:<8} AUC={auc:.4f}")
-
-    del module
-    torch.cuda.empty_cache()
-    gc.collect()
-    print(f"  time: {time.time() - ts:.0f}s")
-
-elapsed = time.time() - t0
-df = pd.DataFrame(all_results)
-df.to_csv(OUTPUT_DIR / "gender_coles_per_seed.csv", index=False)
-
-print(f"GENDER RESULTS ({len(SEEDS)} seed(s))")
-
-for m in ["lgbm", "logreg", "xgboost"]:
-    sub = df[df["model"] == m]
-    print(f"  {m:<8} AUC = {sub['roc_auc'].mean():.4f} ± {sub['roc_auc'].std():.4f}")
-print(f"\nLiterature CoLES Gender: 0.890")
-print(f"Total time: {elapsed:.0f}s ({elapsed/3600:.1f}h)")
-
-with open(OUTPUT_DIR / "gender_summary.json", "w") as f:
-    json.dump({
-        "experiment": "CoLES Gender (paper config)",
-        "config": GENDER_CFG, "emb_dims": EMB_DIMS,
-        "lgbm_config": LGBM_PARAMS, "seeds": SEEDS,
-        "time": elapsed, "date": time.strftime("%Y-%m-%d %H:%M"),
-    }, f, indent=2)
+if __name__ == "__main__":
+    main()

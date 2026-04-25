@@ -7,6 +7,8 @@ import torch
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
+from distil.data._downloads import download_age_data
+
 
 _DATA_DIRECTORY = Path("data")
 _TRANSACTION_FILE = _DATA_DIRECTORY / "transactions_train.csv"
@@ -56,12 +58,14 @@ def _build_records(
     return built_records
 
 
-def load_age_dataset(seed: int = 42) -> AgeDataset:
+def load_age_dataset(seed: int = 42, auto_download: bool = True) -> AgeDataset:
     if not _TRANSACTION_FILE.exists() or not _LABELS_FILE.exists():
-        raise FileNotFoundError(
-            f"Missing raw data. Expected {_TRANSACTION_FILE} and {_LABELS_FILE}.\n"
-            "Run: python experiments/rq1_bidirectional/coles/run_age_coles.py"
-        )
+        if auto_download:
+            download_age_data()
+        else:
+            raise FileNotFoundError(
+                f"Missing raw data. Expected {_TRANSACTION_FILE} and {_LABELS_FILE}."
+            )
 
     transactions = pd.read_csv(_TRANSACTION_FILE)
     labels = pd.read_csv(_LABELS_FILE)

@@ -7,6 +7,8 @@ import torch
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
+from distil.data._downloads import download_rosbank_data
+
 
 _DATA_FILE = Path("data") / "rosbank_train.csv"
 
@@ -56,12 +58,12 @@ def _build_records(
     return built_records
 
 
-def load_rosbank_dataset(seed: int = 42) -> RosbankDataset:
+def load_rosbank_dataset(seed: int = 42, auto_download: bool = True) -> RosbankDataset:
     if not _DATA_FILE.exists():
-        raise FileNotFoundError(
-            f"Missing raw data: {_DATA_FILE}.\n"
-            "Run: python experiments/rq1_bidirectional/coles/run_rosbank_coles.py"
-        )
+        if auto_download:
+            download_rosbank_data()
+        else:
+            raise FileNotFoundError(f"Missing raw data: {_DATA_FILE}.")
 
     raw_dataframe = pd.read_csv(_DATA_FILE)
 
