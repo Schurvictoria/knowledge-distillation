@@ -58,6 +58,10 @@ def main() -> None:
         encoder = build_coles_encoder(dataset.feature_dimensions, coles_config)
         coles_module, trainer = train_coles_baseline(encoder, dataset.train_records, coles_config)
 
+        encoder_checkpoint_path = OUTPUT_DIRECTORY / f"coles_encoder_seed{seed}.pt"
+        torch.save(coles_module._seq_encoder.state_dict(), encoder_checkpoint_path)
+        print(f"  saved encoder checkpoint: {encoder_checkpoint_path}")
+
         torch.cuda.empty_cache()
         train_embeddings = extract_embeddings(
             coles_module, trainer, dataset.train_records, inference_batch_size=128

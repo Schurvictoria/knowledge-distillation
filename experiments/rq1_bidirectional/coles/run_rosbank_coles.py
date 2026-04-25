@@ -65,6 +65,10 @@ def main() -> None:
               f"batch={coles_config.batch_size}")
         coles_module, trainer = train_coles_baseline(encoder, dataset.train_records, coles_config)
 
+        encoder_checkpoint_path = OUTPUT_DIRECTORY / f"coles_encoder_seed{seed}.pt"
+        torch.save(coles_module._seq_encoder.state_dict(), encoder_checkpoint_path)
+        print(f"  saved encoder checkpoint: {encoder_checkpoint_path}")
+
         torch.cuda.empty_cache()
         train_embeddings = extract_embeddings(coles_module, trainer, dataset.train_records)
         test_embeddings = extract_embeddings(coles_module, trainer, dataset.test_records)

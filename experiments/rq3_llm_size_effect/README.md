@@ -20,9 +20,8 @@ rq3_llm_size_effect/
     │   └── E6_3_gender_qwen36.py
     ├── deepseek_v32/                             # E6.4 — DeepSeek-V3.2-Speciale (OpenRouter)
     │   └── E6_4_gender_deepseek.py
-    └── glm_4_7/                                  # E7.3 — GLM-4.7 thinking ablation
-        ├── E7_3_gender_glm_proper.py             # thinking off (deterministic, temp=0)
-        └── E7_3_gender_glm_gold.py               # self-consistency sampling (temp=0.7)
+    └── glm_4_7/                                  # E7.3 — GLM-4.7 (thinking off, temp=0)
+        └── E7_3_gender_glm_proper.py
 ```
 
 ## Direction 1 (LLM → Structured) — E5.x
@@ -58,7 +57,7 @@ LATTE с разными teacher LLMs.
 |---|---|---|---|---|---|---|
 | **E7.1** | Qwen3.6-35B | 35B MoE | results in `results/openrouter/` | 0.7138 | 0.7151 | +0.13 pp |
 | **E7.2** | DeepSeek-V3.2 | 671B MoE | `deepseek_v32/E6_4_gender_deepseek.py` (thinking always on) | N/A | 0.7828 | — |
-| **E7.3** | GLM-4.7 | ~9B | `glm_4_7/E7_3_gender_glm_{proper,gold}.py` | 0.7712 | — | — |
+| **E7.3** | GLM-4.7 | ~9B | `glm_4_7/E7_3_gender_glm_proper.py` | 0.7712 | — | — |
 
 ## Заметка про E6.2 = E3.x
 
