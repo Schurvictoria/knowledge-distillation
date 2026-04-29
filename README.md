@@ -21,7 +21,9 @@ We assume the general research questions:
 
 You can see the results in [REPORT.md](./REPORT.md)
 
-As a result we suggest RAMD
+As a result we suggest new bidirectional method
+
+![LATTE + Symmetric KL](knowledge-distillation/images/method.png)
 
 
 ## Architecture
