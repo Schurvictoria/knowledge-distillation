@@ -1,16 +1,3 @@
-"""
-LATTE finetune — Phase 2 для E1.2.
-
-После того как CoLES baseline обучен (Phase 1), эта функция файнтьюнит его
-с двумя лоссами одновременно:
-  1. Classification (BCE для binary / CE для multiclass)
-  2. InfoNCE contrastive между CoLES embeddings и LLM4ES text embeddings
-
-Total loss = (1-alpha) * classification + alpha * contrastive.
-α=0.1 канонично для всех 3 датасетов (см. ablations/E1_2_gender_latte_alpha_ablation.py).
-
-Honest model selection: track best by VAL, save checkpoint at best-val epoch.
-"""
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,12 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 
-
-# CLIP-style temperature для InfoNCE
 _DEFAULT_INFONCE_TEMPERATURE = 0.07
 _DEFAULT_PROJECTION_HIDDEN = 256
 _DEFAULT_PROJECTION_OUTPUT = 128
-
 
 @dataclass
 class LatteFinetuneConfig:
@@ -41,14 +25,12 @@ class LatteFinetuneConfig:
     infonce_temperature: float = _DEFAULT_INFONCE_TEMPERATURE
     cosine_scheduler_t_max: int = 30
 
-
 def build_projection_head(input_dimension: int, hidden_dimension: int, output_dimension: int) -> nn.Module:
     return nn.Sequential(
         nn.Linear(input_dimension, hidden_dimension),
         nn.ReLU(),
         nn.Linear(hidden_dimension, output_dimension),
     )
-
 
 def build_classifier_head(
     input_dimension: int,
@@ -63,12 +45,10 @@ def build_classifier_head(
         nn.Linear(hidden_dimension, output_dimension),
     )
 
-
 def initialize_xavier(module: nn.Module) -> None:
     for parameter in module.parameters():
         if parameter.dim() > 1:
             nn.init.xavier_uniform_(parameter)
-
 
 def compute_symmetric_infonce_loss(
     sequence_projections: torch.Tensor,
@@ -85,7 +65,6 @@ def compute_symmetric_infonce_loss(
     loss_text_to_sequence = F.cross_entropy(similarity_logits.T, diagonal_targets)
     return (loss_sequence_to_text + loss_text_to_sequence) / 2
 
-
 def standardize_text_embeddings(
     train_text_embeddings: np.ndarray,
     test_text_embeddings: np.ndarray,
@@ -99,7 +78,6 @@ def standardize_text_embeddings(
         torch.FloatTensor(standardized_test).to(device),
     )
 
-
 def extract_sequence_embeddings(encoder, records, device, batch_size: int = 64):
     from ptls.data_load.datasets import inference_data_loader
 
@@ -111,7 +89,6 @@ def extract_sequence_embeddings(encoder, records, device, batch_size: int = 64):
             batch_on_device = batch.to(device)
             embedding_chunks.append(encoder(batch_on_device).cpu())
     return torch.cat(embedding_chunks).numpy()
-
 
 def _evaluate_with_lgbm(
     encoder,
@@ -161,7 +138,6 @@ def _evaluate_with_lgbm(
     test_score = accuracy_score(test_targets, classifier.predict(scaled_test))
     return float(val_score), float(test_score)
 
-
 def train_latte_finetune(
     sequence_encoder,
     train_records: list[dict],
@@ -181,7 +157,6 @@ def train_latte_finetune(
     baseline_test_score: float,
     seed: int = 42,
 ) -> dict[str, float]:
-    """Phase 2 of LATTE: contrastive alignment with classification co-training."""
     sequence_encoder.load_state_dict(torch.load(coles_baseline_checkpoint_path, map_location=device))
     sequence_encoder.train()
 

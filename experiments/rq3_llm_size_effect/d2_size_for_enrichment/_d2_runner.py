@@ -1,17 +1,3 @@
-"""Shared runner for D2 size ladder kNN-CoT experiments (E6.0/E6.1/E6.1.5).
-
-Runs ONE local Qwen model in 4-bit NF4 on Gender, two strategies:
-  - zero_shot baseline (no enrichment) → "No enrichment" column
-  - zero_shot + kNN context           → "+ kNN" column
-
-Predictions are derived via logit-based scoring of pos/neg label tokens
-(deterministic, faster than generation). Outputs:
-
-  results/{output_dir_name}/
-    summary.json              — AUCs for both strategies + delta
-    predictions_no_enrich.npz — raw probabilities + cids + y_test
-    predictions_knn.npz       — same with kNN
-"""
 import gc
 import json
 import os
@@ -27,7 +13,6 @@ import numpy as np
 import torch
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-# Reproducibility (seed=42)
 import random as _random
 _SEED = 42
 _random.seed(_SEED); np.random.seed(_SEED)
@@ -43,7 +28,6 @@ from run_openrouter_experiments import load_dataset
 
 from distil.results import save_experiment_result
 
-
 def _get_token_ids(tokenizer, token_strings: list[str]) -> list[int]:
     ids = set()
     for token_string in token_strings:
@@ -51,7 +35,6 @@ def _get_token_ids(tokenizer, token_strings: list[str]) -> list[int]:
         if encoded:
             ids.add(encoded[0])
     return sorted(ids)
-
 
 def _predict_pos_probability(
     model,
@@ -72,10 +55,8 @@ def _predict_pos_probability(
     del inputs
     return pos_mass / total if total > 1e-8 else 0.5
 
-
 _GENDER_POS_TOKENS = ["male", " male", "Male", " Male"]
 _GENDER_NEG_TOKENS = ["female", " female", "Female", " Female"]
-
 
 def _build_messages(profile_text: str, knn_context: str | None, system_expert: str) -> list:
     if knn_context is None:
@@ -96,14 +77,12 @@ def _build_messages(profile_text: str, knn_context: str | None, system_expert: s
         {"role": "user", "content": user_content},
     ]
 
-
 def _knn_enrichment_text(knn_entry: dict, pos_label: str, neg_label: str) -> str:
     return (
         f"Similar clients (top-10 nearest by transaction patterns): "
         f"{knn_entry['pos']} {pos_label}, {knn_entry['neg']} {neg_label} "
         f"(majority: {knn_entry['majority']})."
     )
-
 
 def run_d2_size_ladder(
     experiment_id: str,
@@ -116,12 +95,11 @@ def run_d2_size_ladder(
     output_directory = Path(f"results/{output_dir_name}")
     output_directory.mkdir(parents=True, exist_ok=True)
 
-    print(f"=== {experiment_id} ===", flush=True)
-    print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}, seed={_SEED}", flush=True)
-    print(f"  model:  {model_id}", flush=True)
-    print(f"  output: {output_directory}", flush=True)
+    print(f"=== {experiment_id} ===")
+    print(f"  model:  {model_id}")
+    print(f"  output: {output_directory}")
 
-    print("\n[Stage 1] Loading dataset (Gender) + kNN context...", flush=True)
+    print("\n[Stage 1] Loading dataset (Gender) + kNN context...")
     data = load_dataset("gender")
     cids_test = data["cids_test"]
     y_test = data["y_test"]
@@ -130,9 +108,9 @@ def run_d2_size_ladder(
     system_expert = data["system_expert"]
     serialize = data["serialize"]
     knn_ctx = data["knn_ctx"]
-    print(f"  test customers: {len(cids_test)}", flush=True)
+    print(f"  test customers: {len(cids_test)}")
 
-    print(f"\n[Stage 2] Loading {model_id} (4-bit NF4)...", flush=True)
+    print(f"\n[Stage 2] Loading {model_id} (4-bit NF4)...")
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -148,11 +126,11 @@ def run_d2_size_ladder(
     )
     model.eval()
     if torch.cuda.is_available():
-        print(f"  loaded. GPU memory: {torch.cuda.memory_allocated() / 1024 ** 3:.1f}GB", flush=True)
+        print(f"  loaded. GPU memory: {torch.cuda.memory_allocated() / 1024 ** 3:.1f}GB")
 
     pos_token_ids = _get_token_ids(tokenizer, _GENDER_POS_TOKENS)
     neg_token_ids = _get_token_ids(tokenizer, _GENDER_NEG_TOKENS)
-    print(f"  pos_ids={pos_token_ids}, neg_ids={neg_token_ids}", flush=True)
+    print(f"  pos_ids={pos_token_ids}, neg_ids={neg_token_ids}")
 
     profile_cache: dict[int, str] = {}
     for cid in cids_test:
@@ -161,14 +139,14 @@ def run_d2_size_ladder(
     strategy_results: dict[str, dict] = {}
 
     for strategy_name in ["no_enrich", "knn"]:
-        print(f"\n[Stage 3] Strategy: {strategy_name}", flush=True)
+        print(f"\n[Stage 3] Strategy: {strategy_name}")
         checkpoint_path = output_directory / f"predictions_{strategy_name}_ckpt.npz"
 
         if checkpoint_path.exists():
             saved = np.load(checkpoint_path)
             predictions: list[float] = list(saved["predictions"])
             start_index = len(predictions)
-            print(f"  resuming from {start_index}/{len(cids_test)}", flush=True)
+            print(f"  resuming from {start_index}/{len(cids_test)}")
         else:
             predictions = []
             start_index = 0
@@ -198,7 +176,6 @@ def run_d2_size_ladder(
                 print(
                     f"    {len(predictions)}/{len(cids_test)} "
                     f"({rate:.1f}/s, ETA {eta_seconds / 60:.0f}min, running AUC={running_auc:.4f})",
-                    flush=True,
                 )
 
         predictions_array = np.array(predictions)
@@ -209,7 +186,6 @@ def run_d2_size_ladder(
         print(
             f"  {strategy_name}: AUC={final_auc:.4f}, acc={final_accuracy:.4f}, "
             f"time={strategy_elapsed:.0f}s",
-            flush=True,
         )
 
         np.savez(
@@ -230,11 +206,10 @@ def run_d2_size_ladder(
     delta = strategy_results["knn"]["auc"] - strategy_results["no_enrich"]["auc"]
     elapsed_total = time.time() - overall_start
 
-    print("\n=== SUMMARY ===", flush=True)
-    print(f"  no_enrich AUC: {strategy_results['no_enrich']['auc']:.4f}", flush=True)
-    print(f"  + kNN     AUC: {strategy_results['knn']['auc']:.4f}", flush=True)
-    print(f"  Δ            : {delta * 100:+.2f} pp", flush=True)
-    print(f"  total time   : {elapsed_total:.0f}s", flush=True)
+    print(f"  no_enrich AUC: {strategy_results['no_enrich']['auc']:.4f}")
+    print(f"  + kNN     AUC: {strategy_results['knn']['auc']:.4f}")
+    print(f"  Δ            : {delta * 100:+.2f} pp")
+    print(f"  total time   : {elapsed_total:.0f}s")
 
     summary = {
         "experiment": experiment_id,

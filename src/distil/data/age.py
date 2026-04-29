@@ -1,10 +1,3 @@
-"""
-Загрузчик Age датасета (Sberbank, age-group-prediction).
-
-Что делает: читает data/transactions_train.csv + data/train_target.csv,
-кодирует small_group (категория транзакции), 4-class задача (bins).
-30K клиентов — самый большой из трёх датасетов.
-"""
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,7 +9,6 @@ from sklearn.preprocessing import LabelEncoder
 
 from distil.data._downloads import download_age_data
 
-
 _DATA_DIRECTORY = Path("data")
 _TRANSACTION_FILE = _DATA_DIRECTORY / "transactions_train.csv"
 _LABELS_FILE = _DATA_DIRECTORY / "train_target.csv"
@@ -25,7 +17,6 @@ _MINIMUM_TRANSACTIONS_PER_CLIENT = 25
 _TEST_FRACTION = 0.1
 _CATEGORICAL_COLUMNS = ["small_group"]
 
-
 @dataclass
 class AgeDataset:
     train_records: list[dict]
@@ -33,7 +24,6 @@ class AgeDataset:
     feature_dimensions: dict[str, int]
     train_targets: np.ndarray
     test_targets: np.ndarray
-
 
 def _build_records(
     transactions_grouped_by_client: pd.api.typing.DataFrameGroupBy,
@@ -63,7 +53,6 @@ def _build_records(
         }
         built_records.append(record)
     return built_records
-
 
 def load_age_dataset(seed: int = 42, auto_download: bool = True) -> AgeDataset:
     if not _TRANSACTION_FILE.exists() or not _LABELS_FILE.exists():

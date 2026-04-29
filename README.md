@@ -21,26 +21,67 @@ We assume the general research questions:
 
 You can see the results in [REPORT.md](./REPORT.md)
 
-As a result we suggest new bidirectional method
 
 <p align="center">
   <img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
 </p>
 
-## Architecture
+As a result we suggest new bidirectional method
+
+## Datasets
+
+| Dataset  | Task                | Metric    | Clients | Transactions |
+|----------|---------------------|-----------|---------|--------------|
+| Gender   | Binary (gender)     | ROC-AUC   | 8 400   | 6.85M        |
+| Rosbank  | Binary (churn)      | ROC-AUC   | 5 000   | 1.0M         |
+| Age      | 4-class (age group) | Accuracy  | 30 000  | 27M          |
+
 
 ## Quick Start
 
-## Datasets
+Python 3.10+ and a CUDA-capable GPU are recommended (experiments were run on RTX 3090 24GB).
+
+```bash
+# Install the package and its dependencies
+pip install -e .
+
+# (Optional) Pre-download all three datasets into ./data/.
+# Otherwise they are fetched from HuggingFace on first run.
+bash scripts/download_data.sh
+```
+
+The bidirectional method (Stage 4) reuses checkpoints from earlier stages, so the four stages must be run in order.
+
+```bash
+# CoLES baseline
+python experiments/rq1_bidirectional/coles/run_gender_coles.py
+python experiments/rq1_bidirectional/coles/run_rosbank_coles.py
+python experiments/rq1_bidirectional/coles/run_age_coles.py
+
+# LLM4ES
+python experiments/rq2_d1_teacher_signals/feature_based/gender_llm4es.py
+python experiments/rq2_d1_teacher_signals/feature_based/rosbank_llm4es.py
+python experiments/rq2_d1_teacher_signals/feature_based/age_llm4es.py
+
+# LATTE
+python experiments/rq1_bidirectional/latte/E1_2_gender_latte.py
+python experiments/rq1_bidirectional/latte/E1_2_rosbank_latte.py
+python experiments/rq1_bidirectional/latte/E1_2_age_latte.py
+
+# Bidirectional LATTE + Symmetric KL without LoRA
+python experiments/rq1_bidirectional/latte_mutual_kl/gender_mutual_kl.py
+python experiments/rq1_bidirectional/latte_mutual_kl/rosbank_mutual_kl.py
+python experiments/rq1_bidirectional/latte_mutual_kl/age_mutual_kl.py
+```
 
 ## Main results
 
-## Project Structure
+Comparison of knowledge transfer directions (Table 3.7 from the report):
 
-## Experiment Variants
+| Method                              | Direction      | Gender     | Rosbank    | Age        |
+|-------------------------------------|----------------|------------|------------|------------|
+| CoLES baseline                      | Unidirectional | 0.8626     | 0.8054     | 0.6345     |
+| LATTE                               | Unidirectional | 0.8674     | 0.8057     | **0.6429** |
+| LATTE + Symmetric KL (with LoRA)    | Bidirectional  | 0.8713     | 0.8122     | 0.6313     |
+| LATTE + Symmetric KL (without LoRA) | Bidirectional  | **0.8774** | **0.8192** | 0.6397     |
 
-## Datasets
-
-## Requirements
-
-## Results

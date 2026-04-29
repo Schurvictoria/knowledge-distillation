@@ -1,13 +1,3 @@
-"""
-Загрузчик Gender датасета (Sberbank, transactions-gender).
-
-Что делает: читает data/transactions.csv и data/gender_train.csv,
-кодирует mcc_code/tr_type, делает stratified train/test split (90/10, seed=42),
-возвращает GenderDataset с готовыми train/test записями для CoLES.
-
-Используется в: experiments/rq1_bidirectional/coles/run_gender_coles.py,
-experiments/rq1_bidirectional/latte/E1_2_gender_latte.py и т.д.
-"""
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,7 +9,6 @@ from sklearn.preprocessing import LabelEncoder
 
 from distil.data._downloads import download_gender_data
 
-
 _DATA_DIRECTORY = Path("data")
 _TRANSACTION_FILE = _DATA_DIRECTORY / "transactions.csv"
 _LABELS_FILE = _DATA_DIRECTORY / "gender_train.csv"
@@ -28,7 +17,6 @@ _MINIMUM_TRANSACTIONS_PER_CLIENT = 25
 _TEST_FRACTION = 0.1
 _CATEGORICAL_COLUMNS = ["mcc_code", "tr_type"]
 
-
 @dataclass
 class GenderDataset:
     train_records: list[dict]
@@ -36,7 +24,6 @@ class GenderDataset:
     feature_dimensions: dict[str, int]
     train_targets: np.ndarray
     test_targets: np.ndarray
-
 
 def _parse_transaction_datetime(raw_datetime: str) -> float:
     parts = str(raw_datetime).split(" ", 1)
@@ -50,7 +37,6 @@ def _parse_transaction_datetime(raw_datetime: str) -> float:
         fractional_day = (hours * 3600 + minutes * 60 + seconds) / seconds_per_day
         return day_index + fractional_day
     return float(day_index)
-
 
 def _build_records(
     transactions_grouped_by_client: pd.api.typing.DataFrameGroupBy,
@@ -80,7 +66,6 @@ def _build_records(
             record[column_name] = torch.LongTensor(encoded_values)
         built_records.append(record)
     return built_records
-
 
 def load_gender_dataset(seed: int = 42, auto_download: bool = True) -> GenderDataset:
     if not _TRANSACTION_FILE.exists() or not _LABELS_FILE.exists():

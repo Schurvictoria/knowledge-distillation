@@ -1,25 +1,11 @@
-"""
-CoLES baseline — self-supervised contrastive learning of event sequences.
-
-Что делает: TrxEncoder (категории + amount) → RnnSeqEncoder (GRU/LSTM) →
-ContrastiveLoss + HardNegativePairSelector через ColesDataset со sample slices.
-После обучения: extract_embeddings() даёт hidden_size-мерный вектор на клиента.
-
-Конфиги для трёх датасетов вшиты в ColesDataset.for_dataset() — те же что в
-оригинальном dllllb/coles-paper. Менять не надо чтобы числа в REPORT.md совпадали.
-"""
 from dataclasses import dataclass
 from functools import partial
 
 import numpy as np
 
-
-# Размерности embedding-таблиц для каждого категориального признака
-# (взяты из оригинальных coles-paper scenarios)
 _GENDER_EMBEDDING_DIMENSIONS = {"mcc_code": 48, "tr_type": 24}
 _ROSBANK_EMBEDDING_DIMENSIONS = {"mcc_code": 24, "channel_type": 4, "currency": 4, "trx_category": 4}
 _AGE_EMBEDDING_DIMENSIONS = {"small_group": 16}
-
 
 @dataclass
 class ColesConfig:
@@ -77,7 +63,6 @@ class ColesConfig:
             )
         raise ValueError(f"Unknown dataset: {dataset_name!r}")
 
-
 def build_coles_encoder(feature_dimensions, config):
     from ptls.nn import RnnSeqEncoder, TrxEncoder
 
@@ -103,7 +88,6 @@ def build_coles_encoder(feature_dimensions, config):
     )
 
     return sequence_encoder
-
 
 def train_coles_baseline(sequence_encoder, train_records, config):
     import torch
@@ -148,7 +132,6 @@ def train_coles_baseline(sequence_encoder, train_records, config):
     )
     trainer.fit(coles_module, loader)
     return coles_module, trainer
-
 
 def extract_embeddings(coles_module, trainer, records, inference_batch_size: int = 64):
     import torch

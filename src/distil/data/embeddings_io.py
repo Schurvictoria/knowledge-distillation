@@ -1,17 +1,8 @@
-"""
-Сохранение/загрузка CoLES embeddings под единые пути.
-
-Каждый CoLES baseline (E1.1) сохраняет в embeddings/{dataset}/ шесть файлов:
-emb_train, emb_test, cids_train, cids_test, y_train, y_test (per-seed).
-Все downstream скрипты (LATTE, LLM4ES concat, kNN CoT) читают эти эмбеддинги.
-"""
 from pathlib import Path
 
 import numpy as np
 
-
 _EMBEDDINGS_ROOT = Path("embeddings")
-
 
 def save_coles_embeddings(
     dataset_name: str,
@@ -34,7 +25,6 @@ def save_coles_embeddings(
     np.save(output_directory / f"cids_test_seed{seed}.npy", test_customer_ids)
 
     return output_directory
-
 
 def load_coles_embeddings(
     dataset_name: str,

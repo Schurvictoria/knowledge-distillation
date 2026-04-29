@@ -1,17 +1,7 @@
-"""
-Оценка качества embeddings через downstream классификаторы.
-
-Для каждой задачи (binary/multiclass) обучает 3 классификатора на CoLES embeddings:
-LightGBM, XGBoost, LogisticRegression. Возвращает метрики (roc_auc/accuracy/f1).
-
-Параметры LGBM/XGB совпадают с оригинальными dllllb/coles-paper scenarios.
-"""
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.preprocessing import MaxAbsScaler
 
-
-# LGBM hyperparameters для binary задач (Gender, Rosbank) — paper config
 _LGBM_BINARY_PARAMS = dict(
     n_estimators=500,
     learning_rate=0.02,
@@ -42,11 +32,9 @@ _LGBM_MULTICLASS_PARAMS = dict(
     verbosity=-1,
 )
 
-
 def _scale_embeddings(train_embeddings: np.ndarray, test_embeddings: np.ndarray):
     scaler = MaxAbsScaler()
     return scaler.fit_transform(train_embeddings), scaler.transform(test_embeddings)
-
 
 def evaluate_lgbm_classifier(
     train_embeddings: np.ndarray,
@@ -83,7 +71,6 @@ def evaluate_lgbm_classifier(
         }
 
     raise ValueError(f"Unknown task_type: {task_type!r}. Expected 'binary' or 'multiclass'.")
-
 
 def evaluate_xgboost_classifier(
     train_embeddings: np.ndarray,
@@ -126,7 +113,6 @@ def evaluate_xgboost_classifier(
 
     raise ValueError(f"Unknown task_type: {task_type!r}")
 
-
 def evaluate_logistic_regression(
     train_embeddings: np.ndarray,
     train_targets: np.ndarray,
@@ -147,7 +133,6 @@ def evaluate_logistic_regression(
 
     predictions = classifier.predict(scaled_test)
     return {"accuracy": float(accuracy_score(test_targets, predictions))}
-
 
 def evaluate_all_classifiers(
     train_embeddings: np.ndarray,

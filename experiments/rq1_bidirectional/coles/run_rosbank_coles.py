@@ -1,4 +1,3 @@
-"""E1.1 — CoLES baseline on Rosbank dataset (LSTM, churn prediction)."""
 import json
 import time
 import warnings
@@ -22,7 +21,6 @@ from distil.models import (
 from distil.reproducibility import seed_everything
 from distil.results import save_experiment_result
 
-
 SEEDS = [42]
 DATASET_NAME = "rosbank"
 EXPERIMENT_BASE_ID = "E1_1_rosbank"
@@ -31,11 +29,7 @@ VARIANT_LABEL = "coles_paper_aligned"
 OUTPUT_DIRECTORY = Path("results/rosbank_coles")
 OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
-
 def main() -> None:
-    print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
-    if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     coles_config = ColesConfig.for_dataset(DATASET_NAME)
     print("ROSBANK CoLES (aligned with coles-paper original)")
@@ -51,7 +45,6 @@ def main() -> None:
     overall_start_time = time.time()
 
     for seed in SEEDS:
-        print(f"\n--- seed={seed} ---")
         per_seed_start_time = time.time()
         seed_everything(seed)
 
@@ -67,12 +60,10 @@ def main() -> None:
 
         encoder_checkpoint_path = OUTPUT_DIRECTORY / f"coles_encoder_seed{seed}.pt"
         torch.save(coles_module._seq_encoder.state_dict(), encoder_checkpoint_path)
-        print(f"  saved encoder checkpoint: {encoder_checkpoint_path}")
 
         torch.cuda.empty_cache()
         train_embeddings = extract_embeddings(coles_module, trainer, dataset.train_records)
         test_embeddings = extract_embeddings(coles_module, trainer, dataset.test_records)
-        print(f"  embeddings: {train_embeddings.shape}")
 
         train_customer_ids = np.array([record["customer_id"] for record in dataset.train_records])
         test_customer_ids = np.array([record["customer_id"] for record in dataset.test_records])
@@ -86,9 +77,6 @@ def main() -> None:
             train_customer_ids=train_customer_ids,
             test_customer_ids=test_customer_ids,
         )
-        if seed == SEEDS[0]:
-            print(f"  saved embeddings to {embedding_directory}")
-
         downstream_metrics = evaluate_all_classifiers(
             train_embeddings=train_embeddings,
             train_targets=dataset.train_targets,
@@ -111,7 +99,6 @@ def main() -> None:
         del coles_module, trainer
         torch.cuda.empty_cache()
         gc.collect()
-        print(f"  time: {time.time() - per_seed_start_time:.0f}s")
 
     elapsed_total = time.time() - overall_start_time
 
@@ -128,11 +115,8 @@ def main() -> None:
     aggregated_dataframe = pd.DataFrame(aggregated_rows)
     aggregated_dataframe.to_csv(OUTPUT_DIRECTORY / "rosbank_coles_aggregated.csv", index=False)
 
-    print(f"\nROSBANK RESULTS ({len(SEEDS)} seed(s))")
     for _, row in aggregated_dataframe.iterrows():
         print(f"  {row['model']:<8} AUC = {row['roc_auc_mean']:.4f} +/- {row['roc_auc_std']:.4f}")
-    print(f"\nLiterature CoLES Rosbank: 0.841")
-    print(f"Total time: {elapsed_total:.0f}s ({elapsed_total/3600:.1f}h)")
 
     summary_path = OUTPUT_DIRECTORY / "rosbank_summary.json"
     with summary_path.open("w") as file_handle:
@@ -181,7 +165,6 @@ def main() -> None:
         runtime_seconds=elapsed_total,
         artifacts={"embeddings_directory": str(embedding_directory)},
     )
-
 
 if __name__ == "__main__":
     main()

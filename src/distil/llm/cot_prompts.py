@@ -1,21 +1,6 @@
-"""
-CoT prompt helpers — построение reasoning блоков для chain-of-thought промптов.
-
-Используется в RQ3 D2 скриптах (E6.3 Qwen3.6, E6.4 DeepSeek) когда мы строим
-few-shot demos с пояснениями. Анализирует серилизованный profile клиента и
-генерирует осмысленную "цепочку рассуждений" before final classification answer.
-"""
 import re
 
-
 def build_cot_reasoning(profile_text: str, classification_label: str) -> str:
-    """
-    Generate structured reasoning based on actual profile features.
-
-    Принимает текстовое описание клиента (со строками типа "Transactions: 47",
-    "avg 800", "Top categories: Retail (20%), Restaurants (15%)") и метку,
-    возвращает обоснование для использования в demo как assistant message.
-    """
     transactions_match = re.search(r'Transactions:\s*(\d+)', profile_text)
     average_amount_match = re.search(r'avg\s*(\d+)', profile_text)
     top_categories_match = re.search(r'Top categories:\s*([^\n]+)', profile_text)

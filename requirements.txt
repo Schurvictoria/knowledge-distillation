@@ -1,0 +1,13 @@
+numpy
+pandas
+scikit-learn
+torch>=2.1
+pytorch-lightning>=2.1
+pytorch-lifestream>=0.7
+transformers
+peft
+datasets
+lightgbm
+xgboost
+shap
+requests

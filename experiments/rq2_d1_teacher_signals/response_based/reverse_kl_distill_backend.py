@@ -1,23 +1,3 @@
-#!/usr/bin/env python3
-"""
-Reverse KL Distillation (MiniLLM-inspired) for Cross-Modal Event Sequences.
-
-Core idea:
-  Standard KD uses forward KL: KL(P_teacher || P_student) → mode averaging
-  MiniLLM (Gu et al., ICLR 2024) uses reverse KL: KL(P_student || P_teacher) → mode seeking
-
-Our adaptation:
-  1. Teacher: LGBM on LLM4ES embeddings → OOF soft probabilities
-  2. Student: CoLES GRU fine-tuned with:
-     Loss = (1-α) * CE(logits, y_true) + α * KL(P_student || P_teacher)  [reverse]
-  3. Compare against forward KL baseline:
-     Loss = (1-α) * CE(logits, y_true) + α * KL(P_teacher || P_student)  [forward]
-
-Novelty: First application of reverse KL distillation to cross-modal
-event-sequence classification (LLM text → sequence encoder).
-
-5 seeds, 3 datasets. Saves checkpoints. Fully reproducible.
-"""
 import json, warnings, gc, random, argparse, time
 from pathlib import Path
 
@@ -36,7 +16,6 @@ from lightgbm import LGBMClassifier
 from ptls.data_load.datasets import inference_data_loader
 from ptls.nn import TrxEncoder, RnnSeqEncoder
 
-# ---- Reproducibility (seed=42) ----
 import random as _random, os as _os
 _SEED = 42
 _random.seed(_SEED); np.random.seed(_SEED)
@@ -47,7 +26,6 @@ _os.environ["PYTHONHASHSEED"] = str(_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-# ---- Required input files ----
 from pathlib import Path as _P
 _required_inputs = [
     ("data/gender_train.csv", "experiments/rq1_bidirectional/coles/run_gender_coles.py"),
@@ -58,25 +36,16 @@ _required_inputs = [
 ]
 for _p, _hint in _required_inputs:
     assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
-# ---- end input check ----
-
-
 
 SEEDS = [42, 123, 456, 789, 1024]
 OUT = Path("results/reverse_kl")
 OUT.mkdir(parents=True, exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 def set_seed(s):
     random.seed(s); np.random.seed(s); torch.manual_seed(s); torch.cuda.manual_seed_all(s)
 
-
-# ============================================================
-# Teacher: get OOF soft labels from LGBM on LLM4ES embeddings
-# ============================================================
 def get_teacher_soft_labels(llm_emb, y, task, n_folds=5):
-    """5-fold OOF predictions from LGBM on LLM4ES embeddings."""
     n_cls = len(np.unique(y))
     oof_probs = np.zeros((len(y), n_cls if task == "multi" else 2))
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
@@ -91,16 +60,11 @@ def get_teacher_soft_labels(llm_emb, y, task, n_folds=5):
         clf.fit(llm_emb[tr_idx], y[tr_idx])
         oof_probs[val_idx] = clf.predict_proba(llm_emb[val_idx])
 
-    # Clip to avoid log(0) in KL
     oof_probs = np.clip(oof_probs, 1e-6, 1.0 - 1e-6)
-    # Re-normalize
+
     oof_probs = oof_probs / oof_probs.sum(axis=1, keepdims=True)
     return oof_probs
 
-
-# ============================================================
-# Data loaders (reused from previous scripts)
-# ============================================================
 def build_gender_data():
     DATA = Path("data")
     tx = pd.read_csv(DATA / "transactions.csv")
@@ -159,7 +123,6 @@ def build_gender_data():
     test_rec = build_records(set(ids[idx_te]))
     return train_rec, test_rec, build_encoder, 1024, "binary"
 
-
 def build_rosbank_data():
     DATA = Path("data")
     df = pd.read_csv(DATA / "rosbank_train.csv")
@@ -212,7 +175,6 @@ def build_rosbank_data():
     test_rec = build_records(set(ids[idx_te]))
     return train_rec, test_rec, build_encoder, 1024, "binary"
 
-
 def build_age_data():
     DATA = Path("data")
     tx = pd.read_csv(DATA / "transactions_train.csv")
@@ -254,7 +216,6 @@ def build_age_data():
     test_rec = build_records(set(ids[idx_te]))
     return train_rec, test_rec, build_encoder, 800, "multi"
 
-
 BUILDERS = {"gender": build_gender_data, "rosbank": build_rosbank_data, "age": build_age_data}
 COLES_CKPT = {
     "gender": "results/gender_true_latte/coles_baseline.pt",
@@ -268,33 +229,21 @@ LLM_EMB = {
 }
 BEST_ALPHA = {"gender": 0.1, "rosbank": 0.1, "age": 0.05}
 
-
-# ============================================================
-# KL losses
-# ============================================================
 def forward_kl(teacher_probs, student_logits):
-    """KL(P_teacher || P_student) — standard KD, mode averaging."""
     student_log_probs = F.log_softmax(student_logits, dim=1)
     return F.kl_div(student_log_probs, teacher_probs, reduction='batchmean')
 
-
 def reverse_kl(teacher_probs, student_logits):
-    """KL(P_student || P_teacher) — MiniLLM-inspired, mode seeking."""
     student_probs = F.softmax(student_logits, dim=1)
     teacher_log_probs = torch.log(teacher_probs + 1e-8)
     student_log_probs = torch.log(student_probs + 1e-8)
     return (student_probs * (student_log_probs - teacher_log_probs)).sum(dim=1).mean()
 
-
-# ============================================================
-# Training loop
-# ============================================================
 def extract(enc, records, bs=64):
     enc.eval()
     dl = inference_data_loader(records, num_workers=0, batch_size=bs)
     with torch.no_grad():
         return torch.cat([enc(b.to(device)).cpu() for b in dl]).numpy()
-
 
 def eval_lgbm(emb_tr, y_tr, emb_te, y_te, task, seed):
     sc = MaxAbsScaler()
@@ -313,7 +262,6 @@ def eval_lgbm(emb_tr, y_tr, emb_te, y_te, task, seed):
                  min_child_samples=50, verbosity=-1, random_state=seed)
         clf = LGBMClassifier(**p).fit(x_tr, y_tr)
         return accuracy_score(y_te, clf.predict(x_te))
-
 
 def train_one_seed(name, seed, kl_mode, alpha, n_epochs, teacher_probs_t,
                    train_rec, test_rec, build_enc, hidden, task):
@@ -353,11 +301,9 @@ def train_one_seed(name, seed, kl_mode, alpha, n_epochs, teacher_probs_t,
             logits = classifier(seq_emb)
             y_b = torch.LongTensor([train_rec[i]["target"] for i in bi]).to(device)
 
-            # Task loss
             loss_ce = F.cross_entropy(logits, y_b)
 
-            # KL distillation loss
-            t_probs = teacher_probs_t[bi]  # (B, n_cls)
+            t_probs = teacher_probs_t[bi]
             loss_kl = kl_fn(t_probs, logits)
 
             loss = (1 - alpha) * loss_ce + alpha * loss_kl
@@ -377,42 +323,34 @@ def train_one_seed(name, seed, kl_mode, alpha, n_epochs, teacher_probs_t,
                 torch.save(enc.state_dict(),
                            OUT / f"{name}_{kl_mode}_seed{seed}.pt")
             print(f"    seed={seed} ep={ep+1}/{n_epochs} loss={tot_loss/n_b:.4f} "
-                  f"score={score:.4f} best={best:.4f}", flush=True)
+                  f"score={score:.4f} best={best:.4f}")
 
     del enc, classifier
     torch.cuda.empty_cache(); gc.collect()
     return {"seed": seed, "baseline": baseline, "best": best}
 
-
 def run_dataset(name, n_epochs=15):
-    """Run forward KL and reverse KL on one dataset, 5 seeds each."""
-    print(f"\n{'='*60}")
     print(f"REVERSE KL EXPERIMENT: {name.upper()}")
-    print(f"{'='*60}", flush=True)
 
     train_rec, test_rec, build_enc, hidden, task = BUILDERS[name]()
     y_tr = np.array([r["target"] for r in train_rec])
 
-    # Load LLM4ES embeddings for teacher
     llm_all = np.load(LLM_EMB[name])["embeddings"].astype(np.float32)
     llm_tr = llm_all[:len(train_rec)]
-    print(f"  train={len(train_rec)}, test={len(test_rec)}, LLM dim={llm_tr.shape[1]}", flush=True)
 
-    # Get OOF teacher soft labels
-    print("  Computing OOF teacher soft labels...", flush=True)
+    print("  Computing OOF teacher soft labels...")
     teacher_probs = get_teacher_soft_labels(llm_tr, y_tr, task)
     teacher_probs_t = torch.FloatTensor(teacher_probs).to(device)
-    print(f"  Teacher OOF probs shape: {teacher_probs.shape}", flush=True)
+    print(f"  Teacher OOF probs shape: {teacher_probs.shape}")
 
     alpha = BEST_ALPHA[name]
     all_results = {}
 
     for kl_mode in ["forward", "reverse"]:
-        print(f"\n  --- {kl_mode.upper()} KL (α={alpha}) ---", flush=True)
         results = []
         t0 = time.time()
         for seed in SEEDS:
-            print(f"\n  [{kl_mode}] seed={seed}", flush=True)
+            print(f"\n  [{kl_mode}] seed={seed}")
             r = train_one_seed(name, seed, kl_mode, alpha, n_epochs,
                                teacher_probs_t, train_rec, test_rec,
                                build_enc, hidden, task)
@@ -420,7 +358,7 @@ def run_dataset(name, n_epochs=15):
             results.append(r)
             elapsed = time.time() - t0
             print(f"  {kl_mode} seed={seed}: baseline={r['baseline']:.4f} "
-                  f"best={r['best']:.4f} (elapsed {elapsed/60:.1f}m)", flush=True)
+                  f"best={r['best']:.4f} (elapsed {elapsed/60:.1f}m)")
 
         bests = [r["best"] for r in results]
         baselines = [r["baseline"] for r in results]
@@ -433,17 +371,15 @@ def run_dataset(name, n_epochs=15):
             "best_std": float(np.std(bests)),
         }
 
-    # Summary
     fwd = all_results["forward"]
     rev = all_results["reverse"]
     print(f"\n  {name}: baseline={fwd['baseline_mean']:.4f}±{fwd['baseline_std']:.4f}")
     print(f"  Forward KL: {fwd['best_mean']:.4f}±{fwd['best_std']:.4f}  "
           f"(Δ={fwd['best_mean']-fwd['baseline_mean']:+.4f})")
     print(f"  Reverse KL: {rev['best_mean']:.4f}±{rev['best_std']:.4f}  "
-          f"(Δ={rev['best_mean']-rev['baseline_mean']:+.4f})", flush=True)
+          f"(Δ={rev['best_mean']-rev['baseline_mean']:+.4f})")
 
     return {"dataset": name, **all_results}
-
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -457,11 +393,9 @@ if __name__ == "__main__":
         all_summaries[d] = s
         with open(OUT / f"{d}_results.json", "w") as f:
             json.dump(s, f, indent=2)
-        print(f"  Saved: {OUT / f'{d}_results.json'}", flush=True)
+        print(f"  Saved: {OUT / f'{d}_results.json'}")
 
-    print("\n" + "=" * 72)
     print("FORWARD vs REVERSE KL — 5-SEED SUMMARY")
-    print("=" * 72)
     for d, s in all_summaries.items():
         fwd = s["forward"]
         rev = s["reverse"]

@@ -1,11 +1,3 @@
-"""
-Превращение MCC-кода (4 цифры) в человекочитаемую категорию.
-
-Используется при серилизации транзакций в текст для LLM (mutual_KL, RAMD, kNN CoT).
-Например: 5814 → "Restaurants and Food", 5912 → "Pharmacies".
-Ranges взяты из стандартного банковского MCC-классификатора.
-"""
-
 _MCC_CATEGORY_RANGES = {
     range(1, 1500): "Agriculture",
     range(1500, 3000): "Construction",
@@ -30,7 +22,6 @@ _MCC_CATEGORY_RANGES = {
     range(8100, 8200): "Legal Services",
     range(8200, 8300): "Education",
 }
-
 
 def classify_mcc_code(mcc_code) -> str:
     try:

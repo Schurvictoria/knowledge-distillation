@@ -1,30 +1,20 @@
-"""
-Auto-download датасетов с HuggingFace pytorch-lifestream org.
-
-Вызывается из data/{gender,rosbank,age}.py если data/*.csv отсутствует.
-Скачивает .gz, разжимает в .csv. Если файл уже есть — пропускает.
-"""
 import subprocess
 from pathlib import Path
 
-
 _DATA_DIRECTORY = Path("data")
 _HUGGINGFACE_BASE_URL = "https://huggingface.co/datasets/pytorch-lifestream"
-
 
 def _download_file(url: str, target_path: Path) -> None:
     if target_path.exists():
         return
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"  downloading {target_path.name}...", flush=True)
+    print(f"  downloading {target_path.name}...")
     subprocess.run(["curl", "-sL", url, "-o", str(target_path)], check=True)
-
 
 def _gunzip_to(source_gzipped: Path, target_uncompressed: Path) -> None:
     with target_uncompressed.open("w") as output_handle:
         subprocess.run(["gunzip", "-c", str(source_gzipped)], stdout=output_handle, check=True)
     source_gzipped.unlink(missing_ok=True)
-
 
 def download_gender_data() -> None:
     base_url = f"{_HUGGINGFACE_BASE_URL}/transactions-gender/resolve/main"
@@ -41,7 +31,6 @@ def download_gender_data() -> None:
         _DATA_DIRECTORY / "gender_train.csv",
     )
 
-
 def download_rosbank_data() -> None:
     base_url = f"{_HUGGINGFACE_BASE_URL}/rosbank-churn/resolve/main"
     _DATA_DIRECTORY.mkdir(parents=True, exist_ok=True)
@@ -53,7 +42,6 @@ def download_rosbank_data() -> None:
     target_gz = _DATA_DIRECTORY / "rosbank_train.csv.gz"
     _download_file(f"{base_url}/train.csv.gz?download=true", target_gz)
     _gunzip_to(target_gz, target_csv)
-
 
 def download_age_data() -> None:
     base_url = f"{_HUGGINGFACE_BASE_URL}/age-group-prediction/resolve/main"

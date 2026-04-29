@@ -1,11 +1,3 @@
-"""
-Загрузчик Rosbank датасета (churn prediction).
-
-Что делает: читает data/rosbank_train.csv (одна таблица — и транзакции и labels),
-парсит TRDATETIME, кодирует MCC + channel_type + currency + trx_category,
-stratified train/test split (90/10, seed=42).
-Бинарная задача: предсказать churn (target_flag).
-"""
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,7 +9,6 @@ from sklearn.preprocessing import LabelEncoder
 
 from distil.data._downloads import download_rosbank_data
 
-
 _DATA_FILE = Path("data") / "rosbank_train.csv"
 
 _MINIMUM_TRANSACTIONS_PER_CLIENT = 15
@@ -26,7 +17,6 @@ _CATEGORICAL_COLUMNS = ["mcc_code", "channel_type", "currency", "trx_category"]
 _DATETIME_FORMAT = "%d%b%y:%H:%M:%S"
 _NANOSECONDS_PER_DAY = np.timedelta64(1, "D")
 
-
 @dataclass
 class RosbankDataset:
     train_records: list[dict]
@@ -34,7 +24,6 @@ class RosbankDataset:
     feature_dimensions: dict[str, int]
     train_targets: np.ndarray
     test_targets: np.ndarray
-
 
 def _build_records(
     transactions_grouped_by_client: pd.api.typing.DataFrameGroupBy,
@@ -64,7 +53,6 @@ def _build_records(
             record[column_name] = torch.LongTensor(encoded_values)
         built_records.append(record)
     return built_records
-
 
 def load_rosbank_dataset(seed: int = 42, auto_download: bool = True) -> RosbankDataset:
     if not _DATA_FILE.exists():
