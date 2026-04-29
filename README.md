@@ -23,7 +23,9 @@ You can see the results in [REPORT.md](./REPORT.md)
 
 As a result we suggest new bidirectional method
 
-<img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
+<p align="center">
+  <img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
+</p>
 
 ## Architecture
 
