@@ -24,7 +24,6 @@ We assume the general research questions:
   <img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
 </p>
 
-As a result we suggest new bidirectional method
 
 ## Datasets
 
