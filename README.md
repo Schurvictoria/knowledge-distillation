@@ -61,7 +61,7 @@ python experiments/rq1_bidirectional/latte/gender_latte.py
 python experiments/rq1_bidirectional/latte/rosbank_latte.py
 python experiments/rq1_bidirectional/latte/age_latte.py
 
-# Bidirectional LATTE + Symmetric KL without LoRA (winning config from Table 3.7)
+# Bidirectional LATTE + Symmetric KL without LoRA
 python experiments/rq1_bidirectional/latte_symmetric_kl/gender_symmetric_kl_without_lora.py
 python experiments/rq1_bidirectional/latte_symmetric_kl/rosbank_symmetric_kl_without_lora.py
 python experiments/rq1_bidirectional/latte_symmetric_kl/age_symmetric_kl_without_lora.py
