@@ -23,14 +23,13 @@ from distil.results import save_experiment_result
 
 SEEDS = [42]
 DATASET_NAME = "rosbank"
-EXPERIMENT_BASE_ID = "E1_1_rosbank"
+EXPERIMENT_BASE_ID = "coles_rosbank"
 VARIANT_LABEL = "coles_paper_aligned"
 
 OUTPUT_DIRECTORY = Path("results/rosbank_coles")
 OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 def main() -> None:
-
     coles_config = ColesConfig.for_dataset(DATASET_NAME)
     print("ROSBANK CoLES (aligned with coles-paper original)")
     print(f"  {coles_config.rnn_type.upper()}-{coles_config.hidden_size}, "

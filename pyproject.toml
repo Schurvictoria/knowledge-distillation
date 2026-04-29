@@ -26,6 +26,9 @@ dependencies = [
     "requests",
 ]
 
+[tool.setuptools]
+py-modules = ["run_openrouter_experiments"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

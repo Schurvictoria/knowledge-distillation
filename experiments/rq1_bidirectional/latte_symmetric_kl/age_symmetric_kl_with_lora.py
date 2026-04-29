@@ -23,10 +23,8 @@ from distil.results import save_experiment_result
 
 SEED = 42
 DATASET_NAME = "age"
-EXPERIMENT_BASE_ID = "E1_3_age"
+EXPERIMENT_BASE_ID = "symmetric_kl_age"
 
-OUTPUT_DIRECTORY = Path("results/age_true_bidirectional")
-OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 COLES_CHECKPOINT_PATH = Path("results/age_true_latte/coles_baseline.pt")
 LLM_CHECKPOINT_PATH = Path("results/age_llm4es/checkpoints/llm4es_lora")
 
@@ -94,7 +92,12 @@ def get_llm_batch_embeddings(llm_model, tokenizer, texts: list, device):
         mask = tokenized["attention_mask"].unsqueeze(-1).float()
         return (hidden_last_4 * mask).sum(1) / mask.sum(1)
 
-def main() -> None:
+def main(use_lora: bool = True) -> None:
+    output_dir_suffix = "" if use_lora else "_without_lora"
+    output_directory = Path(f"results/age_true_bidirectional{output_dir_suffix}")
+    output_directory.mkdir(parents=True, exist_ok=True)
+    llm_model_name = "Qwen/Qwen2.5-3B" if use_lora else "Qwen/Qwen2.5-3B-Instruct"
+
     seed_everything(SEED)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("STEP 1: Load Age data")
@@ -133,7 +136,7 @@ def main() -> None:
     if not COLES_CHECKPOINT_PATH.exists():
         raise FileNotFoundError(
             f"CoLES checkpoint not found: {COLES_CHECKPOINT_PATH}\n"
-            f"Run: python experiments/rq1_bidirectional/latte/E1_2_age_latte.py first"
+            f"Run: python experiments/rq1_bidirectional/latte/age_latte.py first"
         )
     sequence_encoder.load_state_dict(torch.load(COLES_CHECKPOINT_PATH, map_location=device))
     print(f"  CoLES loaded from {COLES_CHECKPOINT_PATH}")
@@ -144,23 +147,26 @@ def main() -> None:
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
     )
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B")
+    tokenizer = AutoTokenizer.from_pretrained(llm_model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     llm_model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-3B", quantization_config=quantization_config, device_map="auto",
+        llm_model_name, quantization_config=quantization_config, device_map="auto",
     )
-    if (LLM_CHECKPOINT_PATH / "adapter_model.safetensors").exists():
-        llm_model = PeftModel.from_pretrained(llm_model, str(LLM_CHECKPOINT_PATH))
-        print(f"  LLM loaded with LoRA from {LLM_CHECKPOINT_PATH}")
+    if use_lora:
+        if (LLM_CHECKPOINT_PATH / "adapter_model.safetensors").exists():
+            llm_model = PeftModel.from_pretrained(llm_model, str(LLM_CHECKPOINT_PATH))
+            print(f"  LLM loaded with LoRA from {LLM_CHECKPOINT_PATH}")
+        else:
+            lora_configuration = LoraConfig(
+                task_type=TaskType.CAUSAL_LM, r=16, lora_alpha=32, lora_dropout=0.05,
+                target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+            )
+            llm_model = get_peft_model(llm_model, lora_configuration)
+            print("  LLM with fresh LoRA")
     else:
-        lora_configuration = LoraConfig(
-            task_type=TaskType.CAUSAL_LM, r=16, lora_alpha=32, lora_dropout=0.05,
-            target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
-        )
-        llm_model = get_peft_model(llm_model, lora_configuration)
-        print("  LLM with fresh LoRA")
+        print("  LLM frozen (no LoRA)")
 
     if torch.cuda.is_available():
         print(f"  VRAM: {torch.cuda.memory_allocated() / 1024**3:.1f}GB")
@@ -228,7 +234,10 @@ def main() -> None:
 
         for epoch_index in range(10):
             sequence_encoder.train()
-            llm_model.train()
+            if use_lora:
+                llm_model.train()
+            else:
+                llm_model.eval()
             for module in [sequence_projection_head, text_projection_head, sequence_classifier, text_classifier]:
                 module.train()
 
@@ -302,7 +311,7 @@ def main() -> None:
                 best_test_for_config = test_acc
                 torch.save(
                     sequence_encoder.state_dict(),
-                    OUTPUT_DIRECTORY / f"coles_bidir_{config_name}.pt",
+                    output_directory / f"coles_bidir_{config_name}.pt",
                 )
 
             print(
@@ -324,7 +333,7 @@ def main() -> None:
         delta = method_score - baseline_test_acc
         print(f"  {method_name:<35} acc={method_score:.4f} ({'+' if delta >= 0 else ''}{delta:.4f})")
 
-    with (OUTPUT_DIRECTORY / "true_bidir_results.json").open("w") as f:
+    with (output_directory / "true_bidir_results.json").open("w") as f:
         json.dump(results, f, indent=2)
 
     save_experiment_result(
@@ -342,7 +351,7 @@ def main() -> None:
             "accum_steps": ACCUM_STEPS,
         },
         seed=SEED,
-        artifacts={"best_checkpoint": str(OUTPUT_DIRECTORY / f"coles_bidir_{best_overall_config}.pt")},
+        artifacts={"best_checkpoint": str(output_directory / f"coles_bidir_{best_overall_config}.pt")},
     )
 
     del llm_model, tokenizer

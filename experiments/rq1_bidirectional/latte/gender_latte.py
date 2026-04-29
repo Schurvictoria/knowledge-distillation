@@ -32,7 +32,7 @@ from distil.results import save_experiment_result
 
 SEED = 42
 DATASET_NAME = "gender"
-EXPERIMENT_BASE_ID = "E1_2_gender"
+EXPERIMENT_BASE_ID = "latte_gender"
 TASK_TYPE = "binary"
 
 OUTPUT_DIRECTORY = Path("results/gender_true_latte")
@@ -126,7 +126,6 @@ def main() -> None:
     train_targets = train_targets_full[train_indices_relative]
     val_targets = train_targets_full[val_indices_relative]
     train_customer_ids = [record["customer_id"] for record in train_records]
-
 
     text_embeddings_train, _ = _load_aligned_llm4es_embeddings(
         train_customer_ids=train_customer_ids,

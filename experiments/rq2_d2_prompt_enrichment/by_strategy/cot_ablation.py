@@ -86,7 +86,6 @@ def run_experiment(model_key, thinking_mode, dataset_name, api_key):
         print(f"  {m['name']} thinking={thinking_mode}: AUC={cached['auc']:.4f} (cached)")
         return cached["auc"]
 
-
     system = f"{data['system_expert']} You also have analysis from an ML model."
 
     def build_msg(i):

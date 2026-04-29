@@ -30,7 +30,7 @@ from distil.results import save_experiment_result
 
 SEED = 42
 DATASET_NAME = "age"
-EXPERIMENT_BASE_ID = "E1_2_age"
+EXPERIMENT_BASE_ID = "latte_age"
 TASK_TYPE = "multiclass"
 
 OUTPUT_DIRECTORY = Path("results/age_true_latte")

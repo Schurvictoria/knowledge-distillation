@@ -122,7 +122,6 @@ def build_knn_demos(query_emb, train_emb, train_cids, y_train, serialize,
     return demos
 
 def run_strategy(strategy, dataset_name, api_key):
-
     data = load_dataset(dataset_name)
     train_emb = np.load(f"embeddings/{dataset_name}/emb_train_seed42.npy")
     test_emb = np.load(f"embeddings/{dataset_name}/emb_test_seed42.npy")

@@ -29,7 +29,6 @@ _required_inputs = [
 for _p, _hint in _required_inputs:
     assert _P(_p).exists(), f"\n  Missing input: {_p}\n  Run prerequisite: {_hint}"
 
-
 OUTPUT_DIR = Path("results/gender_llm")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR = Path("data")

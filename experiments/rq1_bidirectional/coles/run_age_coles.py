@@ -23,13 +23,12 @@ from distil.results import save_experiment_result
 
 SEEDS = [42]
 DATASET_NAME = "age"
-EXPERIMENT_BASE_ID = "E1_1_age"
+EXPERIMENT_BASE_ID = "coles_age"
 
 OUTPUT_DIRECTORY = Path("results/age_coles")
 OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 def main() -> None:
-
     coles_config = ColesConfig.for_dataset(DATASET_NAME)
     print("AGE CoLES (paper config)")
     print(f"  {coles_config.rnn_type.upper()}-{coles_config.hidden_size}, "

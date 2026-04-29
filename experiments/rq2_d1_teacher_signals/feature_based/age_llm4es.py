@@ -73,7 +73,6 @@ def serialize(cid, max_txns=50):
         lines.append(f"Day {int(r['trans_date'])}: {d} {abs(r['amount_rur']):.0f} at {mcc_cat(r['small_group'])}")
     return "\n".join(lines)
 
-
 print("STEP 2: Fine-tune Qwen2.5-3B (5 epochs, 27k clients)")
 
 MODEL_ID = "Qwen/Qwen2.5-3B"

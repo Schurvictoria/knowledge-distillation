@@ -54,7 +54,7 @@ def require_llm4es_embeddings(dataset: str) -> None:
 
 def require_latte_checkpoint(dataset: str, alpha: float = 0.1) -> None:
     path = Path(f"results/{dataset}_true_latte/coles_finetuned_alpha{alpha}.pt")
-    prerequisite = f"experiments/rq1_bidirectional/latte/E1_2_{dataset}_latte.py"
+    prerequisite = f"experiments/rq1_bidirectional/latte/{dataset}_latte.py"
     if not path.exists():
         raise MissingPrerequisiteError(_format_missing_message(path, prerequisite))
 

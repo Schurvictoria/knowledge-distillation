@@ -31,7 +31,7 @@ from distil.results import save_experiment_result
 
 SEED = 42
 DATASET_NAME = "rosbank"
-EXPERIMENT_BASE_ID = "E1_2_rosbank"
+EXPERIMENT_BASE_ID = "latte_rosbank"
 TASK_TYPE = "binary"
 
 OUTPUT_DIRECTORY = Path("results/rosbank_true_latte")

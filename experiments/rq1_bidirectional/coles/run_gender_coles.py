@@ -23,13 +23,12 @@ from distil.results import save_experiment_result
 
 SEEDS = [42]
 DATASET_NAME = "gender"
-EXPERIMENT_BASE_ID = "E1_1_gender"
+EXPERIMENT_BASE_ID = "coles_gender"
 
 OUTPUT_DIRECTORY = Path("results/gender_coles")
 OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 def main() -> None:
-
     coles_config = ColesConfig.for_dataset(DATASET_NAME)
     print(f"GENDER CoLES: {coles_config.rnn_type.upper()}-{coles_config.hidden_size}, "
           f"lr={coles_config.learning_rate}, epochs={coles_config.num_epochs}, seeds={SEEDS}")
