@@ -23,7 +23,7 @@ You can see the results in [REPORT.md](./REPORT.md)
 
 As a result we suggest new bidirectional method
 
-![LATTE + Symmetric KL](images/method.png)
+<img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
 
 ## Architecture
 
