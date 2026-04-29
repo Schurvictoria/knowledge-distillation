@@ -10,6 +10,11 @@ This project explores knowledge transfer between LLMs (large language models) an
 
 We study two directions of knowledge transfer: distilling LLM outputs (pseudo-labels, rationales) into structured models, and enriching LLM prompts with embeddings and statistics from structured models as chain-of-thought context.
 
+
+<p align="center">
+  <img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
+</p>
+
 We assume the general research questions:
 
 **RQ1:** Does bidirectional knowledge transfer between LLMs and structured models improve transaction classification performance compared to either approach alone?
@@ -20,9 +25,6 @@ We assume the general research questions:
 
 
 
-<p align="center">
-  <img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
-</p>
 
 
 ## Datasets
