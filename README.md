@@ -19,8 +19,6 @@ We assume the general research questions:
 **RQ3:** How do LLM size and CoT reasoning ability affect transfer quality in both directions?
 
 
-You can see the results in [REPORT.md](./REPORT.md)
-
 
 <p align="center">
   <img src="images/method.png" width="50%" alt="LATTE + Symmetric KL" />
@@ -39,18 +37,16 @@ As a result we suggest new bidirectional method
 
 ## Quick Start
 
-Python 3.10+ and a CUDA-capable GPU are recommended (experiments were run on RTX 3090 24GB).
+Experiments were run on RTX 3090 24GB
 
 ```bash
-# Install the package and its dependencies
 pip install -e .
 
-# (Optional) Pre-download all three datasets into ./data/.
-# Otherwise they are fetched from HuggingFace on first run.
+# Pre-download all three datasets
 bash scripts/download_data.sh
 ```
 
-The bidirectional method (Stage 4) reuses checkpoints from earlier stages, so the four stages must be run in order.
+The bidirectional method uses checkpoints from earlier stages, so the four stages must be run in order.
 
 ```bash
 # CoLES baseline
@@ -76,7 +72,7 @@ python experiments/rq1_bidirectional/latte_mutual_kl/age_mutual_kl.py
 
 ## Main results
 
-Comparison of knowledge transfer directions (Table 3.7 from the report):
+Comparison of knowledge transfer directions
 
 | Method                              | Direction      | Gender     | Rosbank    | Age        |
 |-------------------------------------|----------------|------------|------------|------------|
