@@ -23,8 +23,7 @@ You can see the results in [REPORT.md](./REPORT.md)
 
 As a result we suggest new bidirectional method
 
-![LATTE + Symmetric KL](knowledge-distillation/images/method.png)
-
+![LATTE + Symmetric KL](images/method.png)
 
 ## Architecture
 
